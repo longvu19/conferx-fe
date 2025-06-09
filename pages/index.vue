@@ -536,7 +536,7 @@ const onLoad = (container: ParticlesContainer) => {
       </div>
     </section>
 
-    <section class="py-20 bg-black/50">
+    <section class="py-20 bg-test-loaded">
       <h3 class="text-3xl font-bold mb-4 text-center">Why Choose ConferX?</h3>
       <p class="text-gray-300 text-lg text-center">Powerful features designed for modern collaboration</p>
       <UContainer>

@@ -1,16 +1,30 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   compatibilityDate: '2025-05-15',
-  devtools: { enabled: true },
-  css: ['/assets/css/main.css'],
+  devtools: {
+    enabled: true,
+    timeline: {
+      enabled: true
+    }
+  },
+  css: [
+    '/assets/css/main.css',
+    '/assets/css/tailwind.css'
+  ],
   modules: [
     '@nuxt/eslint',
     '@nuxt/icon',
     '@nuxt/fonts',
     '@nuxt/image',
     '@nuxt/ui',
-    'nuxt-particles'
+    'nuxt-particles',
+    '@pinia/nuxt',
+    '@nuxtjs/tailwindcss'
   ],
+  tailwindcss: {
+    cssPath: './assets/css/tailwind.css',
+    configPath: "./tailwind.config.ts",
+  },
   particles: {
     mode: 'full', // 'full' | 'slim' | 'basic' | 'custom'
     lazy: true

@@ -12,9 +12,6 @@ const schema = z.object({
 const microItems = ref<{ kind: string; label: string; value: string }[]>([]);
 const cameraItems = ref<{ kind: string; label: string; value: string }[]>([]);
 const speakerItems = ref<{ kind: string; label: string; value: string }[]>([]);
-const selectedMicrophone = ref('');
-const selectedCamera = ref('');
-const selectedSpeaker = ref('');
 
 type Schema = z.output<typeof schema>
 
@@ -27,17 +24,14 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
   console.log(event.data)
 }
 
+const { selectedVideoInput: selectedCamera, selectedAudioInput: selectedMicrophone, selectedAudioOutput: selectedSpeaker } = useGetSelectedDevices();
+
 const getDevices = async () => {
   try {
-    const devices = await navigator.mediaDevices.enumerateDevices()
-    const items = devices.map(device => ({
-        kind: device.kind,
-        label: device.label || 'Unknown Device',
-        value: device.deviceId
-      }))
-    microItems.value = items.filter(device => device.kind === 'audioinput');
-    cameraItems.value = items.filter(device => device.kind === 'videoinput');
-    speakerItems.value = items.filter(device => device.kind === 'audiooutput');
+    const items = (await useState('media-devices').value) as Array<{ kind: MediaDeviceKind; label: string; value: string; }>;
+    microItems.value = items.filter((device: { kind: MediaDeviceKind; }) => device.kind === 'audioinput');
+    cameraItems.value = items.filter((device: { kind: MediaDeviceKind; }) => device.kind === 'videoinput');
+    speakerItems.value = items.filter((device: { kind: MediaDeviceKind; }) => device.kind === 'audiooutput');
     if (microItems.value.length > 0) {
       selectedMicrophone.value = microItems.value[0].value;
     }
@@ -50,6 +44,21 @@ const getDevices = async () => {
   } catch (error) {
     console.error('Error fetching devices:', error)
   }
+}
+
+const changeAudioInput = (event: Event) => {
+  const target = event.target as HTMLSelectElement;
+  selectedMicrophone.value = target.value;
+}
+
+const changeCameraInput = (event: Event) => {
+  const target = event.target as HTMLSelectElement;
+  selectedCamera.value = target.value;
+}
+
+const changeSpeakerOutput = (event: Event) => {
+  const target = event.target as HTMLSelectElement;
+  selectedSpeaker.value = target.value;
 }
 
 onMounted(async () => {
@@ -71,15 +80,15 @@ onMounted(async () => {
     <div class="grid grid-cols-3 gap-4 mt-3">
       <UFormField label="Microphone" class="w-full">
         <USelect v-model="selectedMicrophone" icon="heroicons:microphone-solid" size="lg" color="primary" variant="soft"
-          :items="microItems" class="w-full" />
+          :items="microItems" class="w-full" :ui="{ content: 'min-w-fit' }" @change="changeAudioInput" />
       </UFormField>
       <UFormField label="Camera" class="w-full">
         <USelect v-model="selectedCamera" icon="heroicons:camera-solid" size="lg" color="primary" variant="soft"
-          :items="cameraItems" class="w-full" />
+          :items="cameraItems" class="w-full" :ui="{ content: 'min-w-fit' }" @change="changeCameraInput" />
       </UFormField>
       <UFormField label="Speaker" class="w-full">
-        <USelect v-model="selectedSpeaker" icon="heroicons:speaker-wave-16-solid" size="lg" color="primary" variant="soft"
-          :items="speakerItems" class="w-full" />
+        <USelect v-model="selectedSpeaker" icon="heroicons:speaker-wave-16-solid" size="lg" color="primary"
+          variant="soft" :items="speakerItems" class="w-full" :ui="{ content: 'min-w-fit' }" @change="changeSpeakerOutput" />
       </UFormField>
     </div>
   </UForm>

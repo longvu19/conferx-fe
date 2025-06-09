@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useWatchMediaDevices } from '@/composables/useMedia';
 const open = defineModel<boolean>('open');
 const userMicEnabled = ref(true);
 const userCameraEnabled = ref(true);
@@ -46,15 +47,20 @@ const initWebcam = async () => {
   if (!userCameraEnabled.value && !userMicEnabled.value) {
     return
   }
-  await navigator.mediaDevices
-    .getUserMedia({ video: userCameraEnabled.value ? { facingMode: "user" } : false, audio: userMicEnabled.value })
-    .then((stream) => {
-      cameraLoaded.value = userCameraEnabled.value;
-      streamRef.value = stream;
-    })
-    .catch((error) => {
-      console.error('Error accessing webcam:', error);
+  const stream = await useWatchMediaDevices();
+
+  if (stream) {
+    cameraLoaded.value = userCameraEnabled.value;
+    streamRef.value = stream;
+  } else {
+    console.error('Error accessing webcam');
+    const toast = useToast();
+    toast.add({
+      title: 'Uh oh! Something went wrong.',
+      description: 'We were unable to access your devices. Please check your permissions and try again.',
+      color: 'error'
     });
+  }
 }
 const turnoffWebcam = () => {
   // Turn off webcam and stop the stream
@@ -69,8 +75,8 @@ const turnoffWebcam = () => {
 }
 </script>
 <template>
-  <UModal v-model:open="open" title="Create Room" description="" :ui="{ footer: 'justify-between' }" class="w-[600px] max-w-full" 
-    @after:enter="initWebcam" @after:leave="turnoffWebcam">
+  <UModal v-model:open="open" title="Create Room" description="" :ui="{ footer: 'justify-between' }"
+    class="w-[600px] max-w-full" @after:enter="initWebcam" @after:leave="turnoffWebcam">
     <template #description />
     <template #body>
       <div id="webcam-section" class="mb-6">
