@@ -1,7 +1,21 @@
+@import 'tailwindcss';
 @import "@nuxt/ui";
 
 @theme {
   --font-sans: 'Inter', sans-serif;
+  --animate-gradient-xy: gradient-xy 15s ease infinite;
+
+  @keyframes gradient-xy {
+    0% {
+      background-position: 0% 0%;
+    }
+    50% {
+      background-position: 100% 100%;
+    }
+    100% {
+      background-position: 0% 0%;
+    }
+  }
 }
 
 #tsparticles {

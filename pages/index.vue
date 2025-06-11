@@ -499,10 +499,15 @@ const options: ParticlesOptions = {
     }
   }
 }
+const roomCode : Ref<string | null> = ref(null);
 const open = ref(false);
 const onLoad = (container: ParticlesContainer) => {
   // Do something with the container
   container.play()
+}
+const joinRoom = (data: { roomCode: string }) => {
+  roomCode.value = data.roomCode;
+  open.value = true;
 }
 </script>
 <template>
@@ -512,7 +517,7 @@ const onLoad = (container: ParticlesContainer) => {
       <LogoHeader />
 
       <div class="relative z-1 pt-30 pb-15 ">
-        <h2 class="text-5xl font-bold mb-6 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+        <h2 class="text-5xl font-bold mb-6 bg-linear-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
           Connect. Collaborate. Create.
         </h2>
         <p class="text-xl text-gray-300 mb-12 max-w-2xl mx-auto">
@@ -521,22 +526,23 @@ const onLoad = (container: ParticlesContainer) => {
         </p>
         <div id="conference-actions" class="max-w-md mx-auto space-y-6 mb-20">
           <button
-            class="flex items-center justify-center gap-3 w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-normal py-4 px-6 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-blue-600/25 hover:cursor-pointer" @click="open = true">
-            <svg width="14" height="16" class="svg-inline--fa fa-plus" aria-hidden="true" data-prefix="fas" data-icon="plus"
-              xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512">
+            class="flex items-center justify-center gap-3 w-full bg-linear-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-normal py-4 px-6 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-blue-600/25 hover:cursor-pointer"
+            @click="open = true">
+            <svg width="14" height="16" class="svg-inline--fa fa-plus" aria-hidden="true" data-prefix="fas"
+              data-icon="plus" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512">
               <path fill="currentColor"
                 d="M256 80c0-17.7-14.3-32-32-32s-32 14.3-32 32v144H48c-17.7 0-32 14.3-32 32s14.3 32 32 32h144v144c0 17.7 14.3 32 32 32s32-14.3 32-32V288h144c17.7 0 32-14.3 32-32s-14.3-32-32-32H256z" />
             </svg>
             <span>Create Conference Room</span>
           </button>
-          <USeparator label="or" />
-          <JoinRoomForm @open-modal="open = true" />
-          <RoomSettingsPopup v-model:open="open" />
+          <USeparator label="or" color="secondary" />
+          <JoinRoomForm @open-modal="joinRoom" />
+          <RoomSettingsPopup v-model:open="open" :room-code="roomCode" />
         </div>
       </div>
     </section>
 
-    <section class="py-20 bg-test-loaded">
+    <section class="py-20 bg-black/30">
       <h3 class="text-3xl font-bold mb-4 text-center">Why Choose ConferX?</h3>
       <p class="text-gray-300 text-lg text-center">Powerful features designed for modern collaboration</p>
       <UContainer>

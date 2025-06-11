@@ -20,6 +20,10 @@ const state = reactive<Partial<Schema>>({
   password: undefined,
 })
 
+const props = defineProps<{
+  creating: boolean
+}>()
+
 async function onSubmit(event: FormSubmitEvent<Schema>) {
   console.log(event.data)
 }
@@ -68,13 +72,24 @@ onMounted(async () => {
 <template>
   <UForm :schema="schema" :state="state" @submit="onSubmit">
     <div class="grid grid-cols-2 gap-4">
-      <UFormField label="Name" required class="w-full">
+      <UFormField label="Name" required class="w-full flex flex-col justify-end">
         <UInput v-model="state.name" name="name" color="primary" variant="soft" placeholder="Enter your name"
           class="w-full" />
       </UFormField>
-      <UFormField label="Password" required class="w-full">
+      <UFormField label="Password" required class="w-full flex flex-col justify-end"
+        :ui="{ hint: 'flex items-center' }">
         <UInput v-model="state.password" name="password" type="password" color="primary" variant="soft"
           placeholder="Enter your password" class="w-full" />
+        <template v-if="props.creating" #hint>
+          <UTooltip :ui="{ content: 'h-full', }">
+            <UButton icon="heroicons:question-mark-circle-16-solid" size="md" color="info" variant="link" class="p-0" />
+            <template #content>
+              <p>
+                This is Admin password.<br>Join the room with Admin password to gain Admin access.
+              </p>
+            </template>
+          </UTooltip>
+        </template>
       </UFormField>
     </div>
     <div class="grid grid-cols-3 gap-4 mt-3">
@@ -88,7 +103,8 @@ onMounted(async () => {
       </UFormField>
       <UFormField label="Speaker" class="w-full">
         <USelect v-model="selectedSpeaker" icon="heroicons:speaker-wave-16-solid" size="lg" color="primary"
-          variant="soft" :items="speakerItems" class="w-full" :ui="{ content: 'min-w-fit' }" @change="changeSpeakerOutput" />
+          variant="soft" :items="speakerItems" class="w-full" :ui="{ content: 'min-w-fit' }"
+          @change="changeSpeakerOutput" />
       </UFormField>
     </div>
   </UForm>

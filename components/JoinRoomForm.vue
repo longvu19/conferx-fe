@@ -3,8 +3,8 @@ const roomCode = ref('');
 const emit = defineEmits(['openModal']);
 </script>
 <template>
-  <form id="join-room-form" class="flex gap-4" @submit.prevent="() => emit('openModal', roomCode)">
-    <input v-model="roomCode" type="text" name="roomCode" placeholder="Enter room code"
+  <form id="join-room-form" class="flex gap-4" @submit.prevent="() => emit('openModal', { roomCode})">
+    <input v-model="roomCode" type="text" required name="roomCode" placeholder="Enter room code"
       class="w-full bg-dark-100 border border-gray-600 rounded-xl px-4 py-4 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
     <button
       class="flex items-center w-auto justify-center gap-3 bg-gray-700 whitespace-nowrap hover:bg-gray-600 text-white font-normal hover:cursor-pointer py-4 px-6 rounded-xl transition-colors" type="submit">
@@ -16,5 +16,4 @@ const emit = defineEmits(['openModal']);
       <span>Join Room</span>
     </button>
   </form>
-  {{ roomCode }}
 </template>

@@ -8,8 +8,7 @@ export default defineNuxtConfig({
     }
   },
   css: [
-    '/assets/css/main.css',
-    '/assets/css/tailwind.css'
+    '/assets/css/main.css'
   ],
   modules: [
     '@nuxt/eslint',
@@ -21,10 +20,6 @@ export default defineNuxtConfig({
     '@pinia/nuxt',
     '@nuxtjs/tailwindcss'
   ],
-  tailwindcss: {
-    cssPath: './assets/css/tailwind.css',
-    configPath: "./tailwind.config.ts",
-  },
   particles: {
     mode: 'full', // 'full' | 'slim' | 'basic' | 'custom'
     lazy: true

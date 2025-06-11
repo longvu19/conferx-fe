@@ -6,6 +6,9 @@ const userCameraEnabled = ref(true);
 const webcamVideo = useTemplateRef<HTMLVideoElement>('webcamVideo');
 const streamRef = ref<MediaStream | null>(null);
 const cameraLoaded = ref(false);
+const props = defineProps<{
+  roomCode: string | null
+}>();
 const toggleCamera = () => {
   userCameraEnabled.value = !userCameraEnabled.value;
   cameraLoaded.value = !cameraLoaded.value;
@@ -73,9 +76,12 @@ const turnoffWebcam = () => {
     webcamVideo.value.srcObject = null;
   }
 }
+const popupTitle = computed(() => {
+  return props.roomCode ? `Join room - ${props.roomCode}` : 'Create Room';
+});
 </script>
 <template>
-  <UModal v-model:open="open" title="Create Room" description="" :ui="{ footer: 'justify-between' }"
+  <UModal v-model:open="open" :title="popupTitle" description="" :ui="{ footer: 'justify-between' }"
     class="w-[600px] max-w-full" @after:enter="initWebcam" @after:leave="turnoffWebcam">
     <template #description />
     <template #body>
@@ -83,7 +89,7 @@ const turnoffWebcam = () => {
         <div class="relative bg-gray-900 rounded-xl overflow-hidden aspect-video">
           <!-- Webcam Preview -->
           <div id="webcam-preview"
-            class="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900 relative">
+            class="w-full h-full flex items-center justify-center bg-linear-to-br from-gray-800 to-gray-900 relative">
             <div v-if="!cameraLoaded" class="text-center relative z-10">
               <div class="w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-3">
                 <Icon class="text-3xl text-white" name="fluent:video-person-sparkle-48-filled" />
@@ -111,7 +117,7 @@ const turnoffWebcam = () => {
           </div>
         </div>
       </div>
-      <FormRoomSettings />
+      <FormRoomSettings :creating="!roomCode" />
     </template>
     <template #footer>
       <UButton label="Cancel" size="lg" color="neutral" variant="outline" @click="open = false" />
