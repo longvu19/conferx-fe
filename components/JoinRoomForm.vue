@@ -1,10 +1,23 @@
 <script setup lang="ts">
-const roomCode = ref('');
-const emit = defineEmits(['openModal']);
+const roomCode = ref('')
+const emit = defineEmits<{ openModal: [{ roomCode: string }] }>()
+
+// Accept a bare code ("abc-defg-hij") or a pasted invite link.
+const normalize = (value: string) => {
+  const trimmed = value.trim()
+  const fromUrl = trimmed.match(/\/room\/([a-z-]+)/i)?.[1]
+  return (fromUrl ?? trimmed).toLowerCase()
+}
+
+const submit = () => {
+  const code = normalize(roomCode.value)
+  if (code) emit('openModal', { roomCode: code })
+}
 </script>
 <template>
-  <form id="join-room-form" class="flex gap-4" @submit.prevent="() => emit('openModal', { roomCode})">
-    <input v-model="roomCode" type="text" required name="roomCode" placeholder="Enter room code"
+  <form id="join-room-form" class="flex gap-4" @submit.prevent="submit">
+    <input v-model="roomCode" type="text" required name="roomCode" placeholder="Enter room code or link"
+      autocomplete="off" spellcheck="false"
       class="w-full bg-dark-100 border border-gray-600 rounded-xl px-4 py-4 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
     <button
       class="flex items-center w-auto justify-center gap-3 bg-gray-700 whitespace-nowrap hover:bg-gray-600 text-white font-normal hover:cursor-pointer py-4 px-6 rounded-xl transition-colors" type="submit">
