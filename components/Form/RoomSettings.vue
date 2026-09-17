@@ -1,110 +1,76 @@
 <script setup lang="ts">
 import * as z from 'zod'
-import type { FormSubmitEvent } from '@nuxt/ui'
+import type { DeviceOption } from '~/composables/useDevicePreview'
 
-const schema = z.object({
-  name: z.string().min(3, 'Must be at least 3 characters'),
-  password: z.string().min(8, 'Must be at least 8 characters'),
-  microphone: z.string(),
-  camera: z.string(),
-  speaker: z.string()
-})
-const microItems = ref<{ kind: string; label: string; value: string }[]>([]);
-const cameraItems = ref<{ kind: string; label: string; value: string }[]>([]);
-const speakerItems = ref<{ kind: string; label: string; value: string }[]>([]);
-
-type Schema = z.output<typeof schema>
-
-const state = reactive<Partial<Schema>>({
-  name: undefined,
-  password: undefined,
-})
+export interface RoomSettingsState {
+  name: string
+  password: string
+  requireApproval: boolean
+}
 
 const props = defineProps<{
   creating: boolean
+  microphones: DeviceOption[]
+  cameras: DeviceOption[]
+  speakers: DeviceOption[]
 }>()
+const emit = defineEmits<{ submit: [RoomSettingsState] }>()
+const state = defineModel<RoomSettingsState>({ required: true })
+const prefs = useMediaPreferences()
 
-async function onSubmit(event: FormSubmitEvent<Schema>) {
-  console.log(event.data)
-}
-
-const { selectedVideoInput: selectedCamera, selectedAudioInput: selectedMicrophone, selectedAudioOutput: selectedSpeaker } = useGetSelectedDevices();
-
-const getDevices = async () => {
-  try {
-    const items = (await useState('media-devices').value) as Array<{ kind: MediaDeviceKind; label: string; value: string; }>;
-    microItems.value = items.filter((device: { kind: MediaDeviceKind; }) => device.kind === 'audioinput');
-    cameraItems.value = items.filter((device: { kind: MediaDeviceKind; }) => device.kind === 'videoinput');
-    speakerItems.value = items.filter((device: { kind: MediaDeviceKind; }) => device.kind === 'audiooutput');
-    if (microItems.value.length > 0) {
-      selectedMicrophone.value = microItems.value[0].value;
-    }
-    if (cameraItems.value.length > 0) {
-      selectedCamera.value = cameraItems.value[0].value;
-    }
-    if (speakerItems.value.length > 0) {
-      selectedSpeaker.value = speakerItems.value[0].value;
-    }
-  } catch (error) {
-    console.error('Error fetching devices:', error)
-  }
-}
-
-const changeAudioInput = (event: Event) => {
-  const target = event.target as HTMLSelectElement;
-  selectedMicrophone.value = target.value;
-}
-
-const changeCameraInput = (event: Event) => {
-  const target = event.target as HTMLSelectElement;
-  selectedCamera.value = target.value;
-}
-
-const changeSpeakerOutput = (event: Event) => {
-  const target = event.target as HTMLSelectElement;
-  selectedSpeaker.value = target.value;
-}
-
-onMounted(async () => {
-  await getDevices();
-})
+const schema = computed(() => z.object({
+  name: z.string().trim().min(1, 'Enter your name').max(64, 'Use at most 64 characters'),
+  password: props.creating
+    ? z.string().min(8, 'Use at least 8 characters')
+    : z.string().min(1, 'Enter the meeting password'),
+  requireApproval: z.boolean()
+}))
 </script>
 <template>
-  <UForm :schema="schema" :state="state" @submit="onSubmit">
-    <div class="grid grid-cols-2 gap-4">
-      <UFormField label="Name" required class="w-full flex flex-col justify-end">
-        <UInput v-model="state.name" name="name" color="primary" variant="soft" placeholder="Enter your name"
-          class="w-full" />
+  <UForm id="room-settings-form" :schema="schema" :state="state" @submit="emit('submit', state)">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <UFormField label="Your name" name="name" required class="w-full">
+        <UInput v-model="state.name" color="primary" variant="soft" placeholder="How others will see you"
+          autocomplete="name" class="w-full" />
       </UFormField>
-      <UFormField label="Password" required class="w-full flex flex-col justify-end"
+      <UFormField :label="creating ? 'Admin password' : 'Meeting password'" name="password" required class="w-full"
         :ui="{ hint: 'flex items-center' }">
-        <UInput v-model="state.password" name="password" type="password" color="primary" variant="soft"
-          placeholder="Enter your password" class="w-full" />
-        <template v-if="props.creating" #hint>
-          <UTooltip :ui="{ content: 'h-full', }">
-            <UButton icon="heroicons:question-mark-circle-16-solid" size="md" color="info" variant="link" class="p-0" />
+        <UInput v-model="state.password" type="password" color="primary" variant="soft"
+          :placeholder="creating ? 'At least 8 characters' : '8-digit code from the host'"
+          :autocomplete="creating ? 'new-password' : 'off'" class="w-full" />
+        <template #hint>
+          <UTooltip :ui="{ content: 'h-full' }">
+            <UButton icon="i-lucide-circle-help" size="md" color="info" variant="link" class="p-0"
+              aria-label="About this password" />
             <template #content>
-              <p>
-                This is Admin password.<br>Join the room with Admin password to gain Admin access.
+              <p v-if="creating">
+                Keep this to yourself. Join with it from any device to get admin controls.<br>
+                Guests use a separate meeting password shown after you create the room.
+              </p>
+              <p v-else>
+                Enter the meeting password from the host.<br>Hosts can enter their admin password instead.
               </p>
             </template>
           </UTooltip>
         </template>
       </UFormField>
     </div>
-    <div class="grid grid-cols-3 gap-4 mt-3">
+
+    <USwitch v-if="creating" v-model="state.requireApproval" class="mt-4" label="Ask me before guests join"
+      description="Guests wait until you let them in. Turn off to let anyone with the password in." />
+
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
       <UFormField label="Microphone" class="w-full">
-        <USelect v-model="selectedMicrophone" icon="heroicons:microphone-solid" size="lg" color="primary" variant="soft"
-          :items="microItems" class="w-full" :ui="{ content: 'min-w-fit' }" @change="changeAudioInput" />
+        <USelect v-model="prefs.audioInput" icon="i-lucide-mic" color="primary" variant="soft"
+          :items="microphones" placeholder="No microphone" class="w-full" :ui="{ content: 'min-w-fit' }" />
       </UFormField>
       <UFormField label="Camera" class="w-full">
-        <USelect v-model="selectedCamera" icon="heroicons:camera-solid" size="lg" color="primary" variant="soft"
-          :items="cameraItems" class="w-full" :ui="{ content: 'min-w-fit' }" @change="changeCameraInput" />
+        <USelect v-model="prefs.videoInput" icon="i-lucide-video" color="primary" variant="soft"
+          :items="cameras" placeholder="No camera" class="w-full" :ui="{ content: 'min-w-fit' }" />
       </UFormField>
       <UFormField label="Speaker" class="w-full">
-        <USelect v-model="selectedSpeaker" icon="heroicons:speaker-wave-16-solid" size="lg" color="primary"
-          variant="soft" :items="speakerItems" class="w-full" :ui="{ content: 'min-w-fit' }"
-          @change="changeSpeakerOutput" />
+        <USelect v-model="prefs.audioOutput" icon="i-lucide-volume-2" color="primary" variant="soft"
+          :items="speakers" placeholder="System default" class="w-full" :ui="{ content: 'min-w-fit' }" />
       </UFormField>
     </div>
   </UForm>

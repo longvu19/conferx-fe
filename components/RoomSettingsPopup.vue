@@ -1,127 +1,97 @@
 <script setup lang="ts">
-import { useWatchMediaDevices } from '@/composables/useMedia';
-const open = defineModel<boolean>('open');
-const userMicEnabled = ref(true);
-const userCameraEnabled = ref(true);
-const webcamVideo = useTemplateRef<HTMLVideoElement>('webcamVideo');
-const streamRef = ref<MediaStream | null>(null);
-const cameraLoaded = ref(false);
-const props = defineProps<{
-  roomCode: string | null
-}>();
-const toggleCamera = () => {
-  userCameraEnabled.value = !userCameraEnabled.value;
-  cameraLoaded.value = !cameraLoaded.value;
-}
-const toggleMic = () => {
-  userMicEnabled.value = !userMicEnabled.value;
-}
-watch(streamRef, () => {
-  if (streamRef.value) {
-    if (webcamVideo.value) {
-      webcamVideo.value.srcObject = streamRef.value;
-    }
-    webcamVideo.value?.play().catch((error) => {
-      console.error('Error playing video:', error);
-    });
-  }
-})
-watch([userCameraEnabled], async () => {
-  const videoTrack = streamRef.value?.getVideoTracks();
-  if (!userCameraEnabled.value && videoTrack && videoTrack.length > 0) {
-    // If camera is disabled, stop the video track
-    videoTrack[0].stop();
-  } else {
-    // If camera is enabled, ensure the video track is active
-    await initWebcam();
-  }
-});
-watch([userMicEnabled], async () => {
-  const audioTrack = streamRef.value?.getAudioTracks();
-  if (!userMicEnabled.value && audioTrack && audioTrack.length > 0) {
-    // If mic is disabled, stop the audio track
-    audioTrack[0].stop();
-  } else {
-    await initWebcam();
-  }
-});
-const initWebcam = async () => {
-  // Initialize webcam and controls
-  if (!userCameraEnabled.value && !userMicEnabled.value) {
-    return
-  }
-  const stream = await useWatchMediaDevices();
+import type { RoomSettingsState } from './Form/RoomSettings.vue'
 
-  if (stream) {
-    cameraLoaded.value = userCameraEnabled.value;
-    streamRef.value = stream;
-  } else {
-    console.error('Error accessing webcam');
-    const toast = useToast();
+const open = defineModel<boolean>('open')
+const props = defineProps<{ roomCode: string | null }>()
+
+const toast = useToast()
+const api = useRoomApi()
+const { displayName, rememberName } = useIdentity()
+const { prefs, stream, error, microphones, cameras, speakers, start, stop } = useDevicePreview()
+
+const webcamVideo = useTemplateRef<HTMLVideoElement>('webcamVideo')
+const submitting = ref(false)
+const form = ref<RoomSettingsState>({ name: '', password: '', requireApproval: true })
+
+const creating = computed(() => !props.roomCode)
+const title = computed(() => (creating.value ? 'Create a meeting' : `Join ${props.roomCode}`))
+const hasVideo = computed(() => prefs.value.camEnabled && !!stream.value?.getVideoTracks().length)
+
+watch([stream, webcamVideo], ([s, el]) => {
+  if (el) el.srcObject = s
+})
+
+// Reset as soon as the dialog opens (not after the transition) so fast typing isn't wiped.
+watch(open, (isOpen) => {
+  if (isOpen) form.value = { name: displayName.value, password: '', requireApproval: true }
+}, { immediate: true })
+
+const submit = async (state: RoomSettingsState) => {
+  submitting.value = true
+  try {
+    rememberName(state.name.trim())
+    let roomId: string
+    if (creating.value) {
+      const res = await api.createRoom({ name: state.name.trim(), adminPassword: state.password, requireApproval: state.requireApproval })
+      roomId = res.room_id
+    } else {
+      roomId = props.roomCode!
+      await api.joinRoom(roomId, { name: state.name.trim(), password: state.password })
+    }
+    stop()
+    open.value = false
+    await navigateTo({ path: `/room/${roomId}`, query: creating.value ? { invite: '1' } : undefined })
+  } catch (e) {
     toast.add({
-      title: 'Uh oh! Something went wrong.',
-      description: 'We were unable to access your devices. Please check your permissions and try again.',
+      title: creating.value ? 'Could not create the meeting' : 'Could not join the meeting',
+      description: apiErrorMessage(e),
       color: 'error'
-    });
+    })
+  } finally {
+    submitting.value = false
   }
 }
-const turnoffWebcam = () => {
-  // Turn off webcam and stop the stream
-  if (streamRef.value) {
-    streamRef.value.getTracks().forEach((track) => track.stop());
-    streamRef.value = null;
-    cameraLoaded.value = false;
-  }
-  if (webcamVideo.value) {
-    webcamVideo.value.srcObject = null;
-  }
-}
-const popupTitle = computed(() => {
-  return props.roomCode ? `Join room - ${props.roomCode}` : 'Create Room';
-});
 </script>
 <template>
-  <UModal v-model:open="open" :title="popupTitle" description="" :ui="{ footer: 'justify-between' }"
-    class="w-[600px] max-w-full" @after:enter="initWebcam" @after:leave="turnoffWebcam">
-    <template #description />
+  <UModal v-model:open="open" :title="title" :ui="{ footer: 'justify-between' }" class="w-[640px] max-w-full"
+    @after:enter="start" @after:leave="stop">
+    <template #description>
+      <span class="sr-only">Check your camera and microphone, then {{ creating ? 'create' : 'join' }} the meeting.</span>
+    </template>
     <template #body>
-      <div id="webcam-section" class="mb-6">
+      <div class="mb-6">
         <div class="relative bg-gray-900 rounded-xl overflow-hidden aspect-video">
-          <!-- Webcam Preview -->
-          <div id="webcam-preview"
-            class="w-full h-full flex items-center justify-center bg-linear-to-br from-gray-800 to-gray-900 relative">
-            <div v-if="!cameraLoaded" class="text-center relative z-10">
-              <div class="w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-3">
-                <Icon class="text-3xl text-white" name="fluent:video-person-sparkle-48-filled" />
-              </div>
-              <p class="text-gray-400 text-sm">Webcam preview</p>
+          <video ref="webcamVideo" autoplay playsinline muted
+            class="w-full h-full object-cover absolute inset-0 -scale-x-100 transition-opacity"
+            :class="hasVideo ? 'opacity-100' : 'opacity-0'" />
+          <div v-if="!hasVideo" class="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
+            <div class="w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center">
+              <UIcon class="text-3xl text-white" name="i-lucide-user-round" />
             </div>
-            <video id="webcam-video" ref="webcamVideo" class="w-full h-full object-cover absolute inset-0"
-              :class="[cameraLoaded ? 'opacity-100' : 'opacity-0']" />
+            <p class="text-sm" :class="error ? 'text-red-300' : 'text-gray-400'">
+              {{ error ?? (prefs.camEnabled ? 'Starting camera…' : 'Camera is off') }}
+            </p>
           </div>
 
-          <!-- Webcam Controls Overlay -->
-          <div id="webcam-controls" class="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-3">
-            <button id="toggle-mic"
-              class="w-10 h-10 bg-gray-900 rounded-full flex items-center justify-center hover:bg-gray-700 hover:cursor-pointer transition-all border border-gray-600"
-              :class="[userMicEnabled ? 'bg-gray-900' : 'bg-red-500']" @click="toggleMic">
-              <Icon v-if="userMicEnabled" class="text-white" name="fluent:mic-on-48-filled" />
-              <Icon v-else class="text-white" name="fluent:mic-off-48-filled" />
-            </button>
-            <button id="toggle-camera"
-              class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-gray-700 hover:cursor-pointer transition-all border border-gray-600"
-              :class="[cameraLoaded ? 'bg-gray-900' : 'bg-red-500']" @click="toggleCamera">
-              <Icon v-if="cameraLoaded" class="text-white" name="fluent:video-28-filled" />
-              <Icon v-else class="text-white" name="fluent:video-off-28-filled" />
-            </button>
+          <div class="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-3">
+            <UButton :icon="prefs.micEnabled ? 'i-lucide-mic' : 'i-lucide-mic-off'" size="lg"
+              :color="prefs.micEnabled ? 'neutral' : 'error'" variant="solid" class="rounded-full"
+              :aria-label="prefs.micEnabled ? 'Turn off microphone' : 'Turn on microphone'"
+              @click="prefs.micEnabled = !prefs.micEnabled" />
+            <UButton :icon="prefs.camEnabled ? 'i-lucide-video' : 'i-lucide-video-off'" size="lg"
+              :color="prefs.camEnabled ? 'neutral' : 'error'" variant="solid" class="rounded-full"
+              :aria-label="prefs.camEnabled ? 'Turn off camera' : 'Turn on camera'"
+              @click="prefs.camEnabled = !prefs.camEnabled" />
           </div>
         </div>
       </div>
-      <FormRoomSettings :creating="!roomCode" />
+      <FormRoomSettings v-model="form" :creating="creating" :microphones="microphones" :cameras="cameras"
+        :speakers="speakers" @submit="submit" />
     </template>
     <template #footer>
       <UButton label="Cancel" size="lg" color="neutral" variant="outline" @click="open = false" />
-      <UButton label="Submit" size="lg" color="primary" />
+      <UButton :label="creating ? 'Create meeting' : 'Join meeting'" type="submit" form="room-settings-form" size="lg"
+        color="primary" :loading="submitting" />
     </template>
   </UModal>
 </template>
