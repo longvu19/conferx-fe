@@ -3,7 +3,7 @@ import type {
   ISourceOptions as ParticlesOptions,
   Container as ParticlesContainer
 } from '@tsparticles/engine'
-const options: ParticlesOptions = {
+const options = {
   "autoPlay": true,
   "backgroundMask": {
     "composite": "destination-out",
@@ -498,7 +498,7 @@ const options: ParticlesOptions = {
       "value": true
     }
   }
-}
+} as unknown as ParticlesOptions
 const roomCode : Ref<string | null> = ref(null);
 const open = ref(false);
 const onLoad = (container: ParticlesContainer) => {
@@ -509,6 +509,15 @@ const joinRoom = (data: { roomCode: string }) => {
   roomCode.value = data.roomCode;
   open.value = true;
 }
+const createRoom = () => {
+  roomCode.value = null;
+  open.value = true;
+}
+// Invite links and "Rejoin" land here as /?join=<room code>
+const route = useRoute();
+onMounted(() => {
+  if (typeof route.query.join === 'string' && route.query.join) joinRoom({ roomCode: route.query.join });
+})
 </script>
 <template>
   <div>
@@ -527,7 +536,7 @@ const joinRoom = (data: { roomCode: string }) => {
         <div id="conference-actions" class="max-w-md mx-auto space-y-6 mb-20">
           <button
             class="flex items-center justify-center gap-3 w-full bg-linear-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-normal py-4 px-6 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-blue-600/25 hover:cursor-pointer"
-            @click="open = true">
+            @click="createRoom">
             <svg width="14" height="16" class="svg-inline--fa fa-plus" aria-hidden="true" data-prefix="fas"
               data-icon="plus" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512">
               <path fill="currentColor"
