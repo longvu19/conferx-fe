@@ -21,6 +21,9 @@ export interface Tile {
   isSpeaking: boolean
   micOn: boolean
   camOn: boolean
+  handRaised: boolean
+  /** Data URL of a whiteboard doodle submitted to this tile, or '' for none. */
+  doodle: string
   track?: Track
 }
 
@@ -38,6 +41,8 @@ export const useConference = () => {
   const micOn = ref(false)
   const camOn = ref(false)
   const screenOn = ref(false)
+  const handRaised = ref(false)
+  const handRaisedEvent = ref<{ name: string } | null>(null)
   const canPlayAudio = ref(true)
   const deviceError = ref<string | null>(null)
   const audioElements = new Map<string, HTMLMediaElement>()
@@ -57,7 +62,9 @@ export const useConference = () => {
         isLocal: p.isLocal,
         isSpeaking: p.isSpeaking,
         micOn: !!mic && !mic.isMuted,
-        camOn: !!cam?.track && !cam.isMuted
+        camOn: !!cam?.track && !cam.isMuted,
+        handRaised: p.attributes.hand === '1',
+        doodle: p.attributes.doodle || ''
       }
       next.push({ ...base, key: `${p.identity}:camera`, isScreen: false, track: base.camOn ? markRaw(cam!.track!) : undefined })
       if (screen?.track) next.push({ ...base, key: `${p.identity}:screen`, isScreen: true, track: markRaw(screen.track) })
@@ -66,6 +73,7 @@ export const useConference = () => {
     micOn.value = r.localParticipant.isMicrophoneEnabled
     camOn.value = r.localParticipant.isCameraEnabled
     screenOn.value = r.localParticipant.isScreenShareEnabled
+    handRaised.value = r.localParticipant.attributes.hand === '1'
   }
 
   const attachAudio = (track: RemoteTrack, publication: TrackPublication) => {
@@ -105,6 +113,10 @@ export const useConference = () => {
     })
       .on(RoomEvent.ParticipantConnected, rebuild)
       .on(RoomEvent.ParticipantDisconnected, rebuild)
+      // Publication state (not just subscription) so a remote unpublish - e.g. the host
+      // stopping a screen share - clears the tile immediately for every viewer.
+      .on(RoomEvent.TrackPublished, rebuild)
+      .on(RoomEvent.TrackUnpublished, rebuild)
       .on(RoomEvent.TrackSubscribed, (track, pub) => {
         attachAudio(track, pub)
         rebuild()
@@ -119,6 +131,10 @@ export const useConference = () => {
       .on(RoomEvent.TrackUnmuted, rebuild)
       .on(RoomEvent.ActiveSpeakersChanged, rebuild)
       .on(RoomEvent.ParticipantNameChanged, rebuild)
+      .on(RoomEvent.ParticipantAttributesChanged, (changed, participant) => {
+        rebuild()
+        if (changed.hand === '1' && !participant.isLocal) handRaisedEvent.value = { name: participant.name || 'Guest' }
+      })
       .on(RoomEvent.AudioPlaybackStatusChanged, () => {
         canPlayAudio.value = r.canPlaybackAudio
       })
@@ -189,6 +205,17 @@ export const useConference = () => {
 
   const switchDevice = (kind: MediaDeviceKind, deviceId: string) => room.value?.switchActiveDevice(kind, deviceId)
 
+  const toggleHand = async () => {
+    await room.value?.localParticipant.setAttributes({ hand: handRaised.value ? '0' : '1' })
+    rebuild()
+  }
+
+  /** Post (or clear, with '') a whiteboard doodle snapshot to your own tile. */
+  const setDoodle = async (dataUrl: string) => {
+    await room.value?.localParticipant.setAttributes({ doodle: dataUrl })
+    rebuild()
+  }
+
   const sendMessage = async (text: string) => {
     const r = room.value
     const trimmed = text.trim()
@@ -224,6 +251,8 @@ export const useConference = () => {
     micOn,
     camOn,
     screenOn,
+    handRaised,
+    handRaisedEvent,
     canPlayAudio,
     deviceError,
     connect,
@@ -231,6 +260,8 @@ export const useConference = () => {
     toggleMic,
     toggleCamera,
     toggleScreenShare,
+    toggleHand,
+    setDoodle,
     switchDevice,
     sendMessage,
     startAudio

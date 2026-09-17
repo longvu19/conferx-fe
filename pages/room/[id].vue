@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ConnectionState } from 'livekit-client'
 import type { MeResponse, ParticipantInfo } from '~/types/room'
+import type { DeviceOption } from '~/composables/useDevicePreview'
 
 definePageMeta({ layout: false })
 
@@ -14,6 +15,7 @@ const api = useRoomApi()
 const auth = useAuth()
 const prefs = useMediaPreferences()
 const conf = useConference()
+const wb = useWhiteboard()
 
 const roomId = computed(() => String(route.params.id))
 useHead({ title: () => `${roomId.value} – ConferX` })
@@ -26,6 +28,37 @@ const panel = ref<Panel>(null)
 const inviteOpen = ref(false)
 const confirmEndOpen = ref(false)
 const lastReadCount = ref(0)
+const microphones = ref<DeviceOption[]>([])
+const cameras = ref<DeviceOption[]>([])
+const micMenuOpen = ref(false)
+const camMenuOpen = ref(false)
+const whiteboardOpen = ref(false)
+
+const toggleWhiteboard = () => {
+  whiteboardOpen.value = !whiteboardOpen.value
+}
+
+const submitDoodle = (dataUrl: string) => conf.setDoodle(dataUrl)
+
+// ---------- hand-raise toast queue ----------
+// Caps concurrently visible "raised their hand" toasts so a room full of people
+// raising hands at once queues up instead of flooding the screen.
+const MAX_HAND_TOASTS = 3
+const HAND_TOAST_DURATION = 4000
+const handToastQueue = ref<string[]>([])
+const activeHandToasts = ref(0)
+
+const showNextHandToast = () => {
+  if (activeHandToasts.value >= MAX_HAND_TOASTS || !handToastQueue.value.length) return
+  const name = handToastQueue.value[0]!
+  handToastQueue.value = handToastQueue.value.slice(1)
+  activeHandToasts.value++
+  toast.add({ title: `${name} raised their hand`, icon: 'i-lucide-hand', duration: HAND_TOAST_DURATION })
+  setTimeout(() => {
+    activeHandToasts.value--
+    showNextHandToast()
+  }, HAND_TOAST_DURATION)
+}
 
 // Server-assigned id (u_<account> or g_<guest>) for this meeting.
 const selfId = computed(() => me.value?.participant.user_id ?? '')
@@ -79,12 +112,14 @@ const goToJoin = async () => {
   await navigateTo({ path: '/', query: { join: roomId.value } })
 }
 
-const handleSessionError = (e: unknown) => {
-  if (e instanceof SessionExpiredError || [403, 404].includes(apiStatus(e) ?? 0)) {
+const handleSessionError = async (e: unknown) => {
+  // `.name` check, not `instanceof`: Nuxt DevTools wraps auto-imported classes for
+  // metrics in dev, which breaks `instanceof SessionExpiredError` against that binding.
+  if ((e as Error)?.name === 'SessionExpiredError' || [403, 404].includes(apiStatus(e) ?? 0)) {
     api.clearToken(roomId.value)
     stopPolling()
     if (phase.value === 'live') return // LiveKit will report the disconnect reason
-    goToJoin()
+    await goToJoin()
     return
   }
   if (apiStatus(e) === 410) {
@@ -92,6 +127,35 @@ const handleSessionError = (e: unknown) => {
     stopPolling()
   }
 }
+
+// ---------- devices ----------
+const refreshDevices = async () => {
+  const devices = await navigator.mediaDevices.enumerateDevices().catch(() => [])
+  const toOptions = (kind: MediaDeviceKind, fallback: string) =>
+    devices.filter(d => d.kind === kind && d.deviceId).map((d, i) => ({ value: d.deviceId, label: d.label || `${fallback} ${i + 1}` }))
+  microphones.value = toOptions('audioinput', 'Microphone')
+  cameras.value = toOptions('videoinput', 'Camera')
+}
+
+const selectMic = (deviceId: string) => {
+  prefs.value.audioInput = deviceId
+  conf.switchDevice('audioinput', deviceId)
+}
+const selectCam = (deviceId: string) => {
+  prefs.value.videoInput = deviceId
+  conf.switchDevice('videoinput', deviceId)
+}
+
+const micItems = computed(() => microphones.value.map(d => ({
+  label: d.label,
+  icon: d.value === prefs.value.audioInput ? 'i-lucide-check' : undefined,
+  onSelect: () => selectMic(d.value)
+})))
+const camItems = computed(() => cameras.value.map(d => ({
+  label: d.label,
+  icon: d.value === prefs.value.videoInput ? 'i-lucide-check' : undefined,
+  onSelect: () => selectCam(d.value)
+})))
 
 // ---------- flow ----------
 const checkMembership = async () => {
@@ -135,13 +199,14 @@ const enterMeeting = async () => {
     await conf.connect(url, token, prefs.value)
     phase.value = 'live'
     await refreshParticipants()
+    await refreshDevices()
     poll(refreshParticipants, 4000)
     if (route.query.invite) {
       inviteOpen.value = true
       router.replace({ query: {} })
     }
   } catch (e) {
-    handleSessionError(e)
+    await handleSessionError(e)
     if (phase.value === 'connecting') {
       phase.value = 'error'
       errorMessage.value = apiStatus(e) ? apiErrorMessage(e) : 'Could not connect to the media server. Check your network and try again.'
@@ -164,7 +229,7 @@ const start = async () => {
     }
     await checkMembership()
   } catch (e) {
-    handleSessionError(e)
+    await handleSessionError(e)
     if (phase.value === 'loading') {
       phase.value = 'error'
       errorMessage.value = apiErrorMessage(e)
@@ -172,10 +237,14 @@ const start = async () => {
   }
 }
 
-onMounted(start)
+onMounted(() => {
+  start()
+  navigator.mediaDevices?.addEventListener('devicechange', refreshDevices)
+})
 onBeforeUnmount(() => {
   stopPolling()
   stageObserver?.disconnect()
+  navigator.mediaDevices?.removeEventListener('devicechange', refreshDevices)
 })
 
 watch(conf.endReason, (reason) => {
@@ -187,6 +256,12 @@ watch(conf.endReason, (reason) => {
 
 watch(conf.deviceError, (message) => {
   if (message) toast.add({ title: message, color: 'error', icon: 'i-lucide-triangle-alert' })
+})
+
+watch(() => conf.handRaisedEvent.value, (e) => {
+  if (!e) return
+  handToastQueue.value = [...handToastQueue.value, e.name]
+  showNextHandToast()
 })
 
 watch(panel, (value) => {
@@ -311,13 +386,17 @@ const endScreens: Partial<Record<Phase, { title: string, body: string, icon: str
             </div>
             <div class="flex lg:flex-col gap-3 overflow-auto lg:w-56 h-28 lg:h-auto shrink-0">
               <div v-for="tile in cameraTiles" :key="tile.key" class="aspect-video w-44 lg:w-full shrink-0">
-                <RoomVideoTile :tile="tile" compact />
+                <RoomVideoTile :tile="tile" compact @clear-doodle="submitDoodle('')" />
               </div>
             </div>
           </div>
+          <RoomWhiteboard v-else-if="whiteboardOpen" class="h-full" :strokes="wb.strokes.value"
+            :active="wb.active.value" :can-undo="wb.canUndo.value" :start-stroke="wb.startStroke"
+            :add-point="wb.addPoint" :end-stroke="wb.endStroke" :undo="wb.undo" :clear="wb.clear"
+            @close="whiteboardOpen = false" @submit="submitDoodle" />
           <div v-else ref="stage" class="h-full flex flex-wrap items-center justify-center content-center gap-3">
             <div v-for="tile in cameraTiles" :key="tile.key" class="aspect-video" :style="{ width: `${tileWidth}px` }">
-              <RoomVideoTile :tile="tile" :compact="tileWidth < 360" />
+              <RoomVideoTile :tile="tile" :compact="tileWidth < 360" @clear-doodle="submitDoodle('')" />
             </div>
           </div>
         </main>
@@ -337,15 +416,37 @@ const endScreens: Partial<Record<Phase, { title: string, body: string, icon: str
       </div>
 
       <footer class="flex items-center justify-center gap-2 sm:gap-3 px-4 py-3 border-t border-gray-700/50">
-        <UButton :icon="conf.micOn.value ? 'i-lucide-mic' : 'i-lucide-mic-off'" size="xl" class="rounded-full"
-          :color="conf.micOn.value ? 'neutral' : 'error'" :variant="conf.micOn.value ? 'soft' : 'solid'"
-          :aria-label="conf.micOn.value ? 'Mute microphone' : 'Unmute microphone'" @click="conf.toggleMic()" />
-        <UButton :icon="conf.camOn.value ? 'i-lucide-video' : 'i-lucide-video-off'" size="xl" class="rounded-full"
-          :color="conf.camOn.value ? 'neutral' : 'error'" :variant="conf.camOn.value ? 'soft' : 'solid'"
-          :aria-label="conf.camOn.value ? 'Turn off camera' : 'Turn on camera'" @click="conf.toggleCamera()" />
+        <div class="relative group">
+          <UButton :icon="conf.micOn.value ? 'i-lucide-mic' : 'i-lucide-mic-off'" size="xl" class="rounded-full"
+            :color="conf.micOn.value ? 'neutral' : 'error'" :variant="conf.micOn.value ? 'soft' : 'solid'"
+            :aria-label="conf.micOn.value ? 'Mute microphone' : 'Unmute microphone'" @click="conf.toggleMic()" />
+          <UDropdownMenu v-if="microphones.length > 1" v-model:open="micMenuOpen" :items="micItems"
+            :content="{ side: 'top', align: 'center', sideOffset: 12 }">
+            <UButton icon="i-lucide-chevron-up" size="xs" color="neutral" variant="solid"
+              class="absolute -top-2.5 left-1/2 -translate-x-1/2 rounded-full p-1 opacity-0 scale-75 pointer-events-none transition-all duration-150 group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto ring-2 ring-[#141926]"
+              :class="micMenuOpen && 'opacity-100 scale-100 pointer-events-auto'" aria-label="Choose microphone" />
+          </UDropdownMenu>
+        </div>
+        <div class="relative group">
+          <UButton :icon="conf.camOn.value ? 'i-lucide-video' : 'i-lucide-video-off'" size="xl" class="rounded-full"
+            :color="conf.camOn.value ? 'neutral' : 'error'" :variant="conf.camOn.value ? 'soft' : 'solid'"
+            :aria-label="conf.camOn.value ? 'Turn off camera' : 'Turn on camera'" @click="conf.toggleCamera()" />
+          <UDropdownMenu v-if="cameras.length > 1" v-model:open="camMenuOpen" :items="camItems"
+            :content="{ side: 'top', align: 'center', sideOffset: 12 }">
+            <UButton icon="i-lucide-chevron-up" size="xs" color="neutral" variant="solid"
+              class="absolute -top-2.5 left-1/2 -translate-x-1/2 rounded-full p-1 opacity-0 scale-75 pointer-events-none transition-all duration-150 group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto ring-2 ring-[#141926]"
+              :class="camMenuOpen && 'opacity-100 scale-100 pointer-events-auto'" aria-label="Choose camera" />
+          </UDropdownMenu>
+        </div>
         <UButton icon="i-lucide-monitor-up" size="xl" class="rounded-full hidden sm:inline-flex"
           :color="conf.screenOn.value ? 'primary' : 'neutral'" :variant="conf.screenOn.value ? 'solid' : 'soft'"
           :aria-label="conf.screenOn.value ? 'Stop presenting' : 'Present screen'" @click="conf.toggleScreenShare()" />
+        <UButton icon="i-lucide-hand" size="xl" class="rounded-full"
+          :color="conf.handRaised.value ? 'warning' : 'neutral'" :variant="conf.handRaised.value ? 'solid' : 'soft'"
+          :aria-label="conf.handRaised.value ? 'Lower hand' : 'Raise hand'" @click="conf.toggleHand()" />
+        <UButton icon="i-lucide-pencil" size="xl" class="rounded-full hidden sm:inline-flex"
+          :color="whiteboardOpen ? 'primary' : 'neutral'" :variant="whiteboardOpen ? 'solid' : 'soft'"
+          :aria-label="whiteboardOpen ? 'Close whiteboard' : 'Open whiteboard'" @click="toggleWhiteboard()" />
 
         <div class="w-px h-8 bg-gray-700 mx-1" />
 
