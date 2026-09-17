@@ -7,6 +7,7 @@ const props = defineProps<{ roomCode: string | null }>()
 const toast = useToast()
 const api = useRoomApi()
 const { displayName, rememberName } = useIdentity()
+const { user } = useAuth()
 const { prefs, stream, error, microphones, cameras, speakers, start, stop } = useDevicePreview()
 
 const webcamVideo = useTemplateRef<HTMLVideoElement>('webcamVideo')
@@ -23,7 +24,7 @@ watch([stream, webcamVideo], ([s, el]) => {
 
 // Reset as soon as the dialog opens (not after the transition) so fast typing isn't wiped.
 watch(open, (isOpen) => {
-  if (isOpen) form.value = { name: displayName.value, password: '', requireApproval: true }
+  if (isOpen) form.value = { name: user.value?.display_name || displayName.value, password: '', requireApproval: true }
 }, { immediate: true })
 
 const submit = async (state: RoomSettingsState) => {

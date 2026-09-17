@@ -17,6 +17,7 @@ export interface MeResponse {
 
 export interface SessionResponse {
   room_id: string
+  user_id: string
   role: ParticipantRole
   participant_status: ParticipantStatus
   token: string

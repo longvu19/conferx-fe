@@ -11,7 +11,7 @@ const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 const api = useRoomApi()
-const { userId } = useIdentity()
+const auth = useAuth()
 const prefs = useMediaPreferences()
 const conf = useConference()
 
@@ -27,6 +27,8 @@ const inviteOpen = ref(false)
 const confirmEndOpen = ref(false)
 const lastReadCount = ref(0)
 
+// Server-assigned id (u_<account> or g_<guest>) for this meeting.
+const selfId = computed(() => me.value?.participant.user_id ?? '')
 const isAdmin = computed(() => me.value?.participant.role === 'admin')
 const requireApproval = computed(() => me.value?.room.status === 'private')
 const pendingCount = computed(() => participants.value.filter(p => p.status === 'pending').length)
@@ -150,7 +152,16 @@ const enterMeeting = async () => {
 const start = async () => {
   phase.value = 'loading'
   try {
-    if (!api.getToken(roomId.value)) await api.refresh(roomId.value)
+    if (!api.getToken(roomId.value)) {
+      try {
+        await api.refresh(roomId.value)
+      } catch (e) {
+        // The account that created the room can walk back in without a password.
+        if (!auth.ready.value) await auth.refresh()
+        if (!auth.user.value) throw e
+        await api.joinRoom(roomId.value, {}).catch(() => { throw e })
+      }
+    }
     await checkMembership()
   } catch (e) {
     handleSessionError(e)
@@ -221,7 +232,7 @@ const setRequireApproval = (value: boolean) => run(async () => {
 const leave = async () => {
   stopPolling()
   await conf.disconnect()
-  await api.removeParticipant(roomId.value, userId.value).catch(() => {})
+  await api.removeParticipant(roomId.value, selfId.value).catch(() => {})
   api.clearToken(roomId.value)
   phase.value = 'left'
 }
@@ -320,7 +331,7 @@ const endScreens: Partial<Record<Phase, { title: string, body: string, icon: str
           <RoomChatPanel v-if="panel === 'chat'" class="flex-1 min-h-0" :messages="conf.messages.value"
             @send="conf.sendMessage" />
           <RoomPeoplePanel v-else class="flex-1 min-h-0" :participants="participants" :online-ids="onlineIds"
-            :self-id="userId" :is-admin="isAdmin" :require-approval="requireApproval" @approve="approve" @reject="reject"
+            :self-id="selfId" :is-admin="isAdmin" :require-approval="requireApproval" @approve="approve" @reject="reject"
             @remove="remove" @update:require-approval="setRequireApproval" />
         </aside>
       </div>
