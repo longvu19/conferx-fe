@@ -20,6 +20,10 @@ export default defineNuxtConfig({
     '@pinia/nuxt',
     '@nuxtjs/tailwindcss'
   ],
+  runtimeConfig: {
+    // Gateway the Nuxt server proxies /api/** to. Override with NUXT_API_BASE.
+    apiBase: 'http://localhost:9080'
+  },
   particles: {
     mode: 'full', // 'full' | 'slim' | 'basic' | 'custom'
     lazy: true
@@ -38,18 +42,13 @@ export default defineNuxtConfig({
     }
   },
   fonts: {
-    provider: 'google', // sets default provider
+    provider: 'google',
     families: [
       {
-        name: 'Inter', // the 'canonical' name of the font used to look it up in a provider database
-        // provider specific options can be provided
-        // src: '~/public/roboto.woff2', // you can specify a source within your project
-        // specific configuration will be used to generate `@font-face` definitions
-        // subsets: ['latin', 'greek'],
-        display: 'swap', // or 'block'
-        weight: [200, 400],
+        name: 'Inter',
+        display: 'swap',
+        weights: [200, 400, 500, 600],
         styles: ['normal', 'italic'],
-        // and produce CSS overrides to reduce layout shift (using fontaine)
         fallbacks: ['Roboto'],
       }
     ]
