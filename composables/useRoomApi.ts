@@ -15,8 +15,34 @@ export const apiErrorMessage = (error: unknown, fallback = 'Something went wrong
 
 export const apiStatus = (error: unknown) => (error as FetchError)?.statusCode
 
+export interface MyRoom {
+  room_id: string
+  status: RoomStatus
+  room_password: string
+  created_at: string
+}
+
 export const useRoomApi = () => {
   const { userId } = useIdentity()
+  const auth = useAuth()
+
+  /**
+   * Create/join/list send the account token when signed in; otherwise the guest browser id.
+   * If the account token expired, refresh once; if the session is gone, continue as a guest.
+   */
+  const asCaller = async <T>(send: (headers: Record<string, string>, guest: { user_id?: string }) => Promise<T>) => {
+    const attempt = () =>
+      auth.token.value
+        ? send({ Authorization: `Bearer ${auth.token.value}` }, {})
+        : send({}, { user_id: userId.value })
+    try {
+      return await attempt()
+    } catch (e) {
+      if (apiStatus(e) !== 401 || !auth.token.value) throw e
+      await auth.refresh()
+      return await attempt()
+    }
+  }
 
   const getToken = (roomId: string) => (import.meta.client ? sessionStorage.getItem(tokenKey(roomId)) : null)
   const setToken = (roomId: string, token: string) => sessionStorage.setItem(tokenKey(roomId), token)
@@ -54,29 +80,29 @@ export const useRoomApi = () => {
   }
 
   const createRoom = async (input: { name: string, adminPassword: string, requireApproval: boolean }) => {
-    const res = await $fetch<SessionResponse>(BASE, {
+    const res = await asCaller((headers, guest) => $fetch<SessionResponse>(BASE, {
       method: 'POST',
       credentials: 'include',
-      body: {
-        user_id: userId.value,
-        name: input.name,
-        admin_password: input.adminPassword,
-        status: input.requireApproval ? 'private' : 'open'
-      }
-    })
+      headers,
+      body: { ...guest, name: input.name, admin_password: input.adminPassword, status: input.requireApproval ? 'private' : 'open' }
+    }))
     setToken(res.room_id, res.token)
     return res
   }
 
-  const joinRoom = async (roomId: string, input: { name: string, password: string }) => {
-    const res = await $fetch<SessionResponse>(`${BASE}/${roomId}/join`, {
+  /** Password may be omitted when the signed-in account owns the room. */
+  const joinRoom = async (roomId: string, input: { name?: string, password?: string }) => {
+    const res = await asCaller((headers, guest) => $fetch<SessionResponse>(`${BASE}/${roomId}/join`, {
       method: 'POST',
       credentials: 'include',
-      body: { user_id: userId.value, name: input.name, password: input.password }
-    })
+      headers,
+      body: { ...guest, name: input.name, password: input.password || undefined }
+    }))
     setToken(roomId, res.token)
     return res
   }
+
+  const listMyRooms = () => asCaller(headers => $fetch<MyRoom[]>(BASE, { headers }))
 
   return {
     getToken,
@@ -84,6 +110,7 @@ export const useRoomApi = () => {
     refresh,
     createRoom,
     joinRoom,
+    listMyRooms,
     getRoomInfo: (roomId: string) => $fetch<{ room_id: string, status: RoomStatus, participant_count: number }>(`${BASE}/${roomId}`),
     getMe: (roomId: string) => authed<MeResponse>(roomId, '/me'),
     getParticipants: (roomId: string) => authed<ParticipantInfo[]>(roomId, '/participants'),
