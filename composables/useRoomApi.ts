@@ -4,10 +4,18 @@ import type { MeResponse, ParticipantInfo, RoomStatus, SessionResponse } from '~
 const BASE = '/api/v1/rooms'
 const tokenKey = (roomId: string) => `conferx:token:${roomId}`
 
-export class SessionExpiredError extends Error {}
+export class SessionExpiredError extends Error {
+  constructor(message: string) {
+    super(message)
+    // Nuxt DevTools wraps auto-imported classes for metrics, which breaks `instanceof`
+    // checks against the auto-imported binding. Callers should check `.name` instead.
+    this.name = 'SessionExpiredError'
+  }
+}
 
 /** Human readable message from an API error. */
 export const apiErrorMessage = (error: unknown, fallback = 'Something went wrong. Try again.') => {
+  if (error instanceof Error && error.name === 'SessionExpiredError') return error.message
   const e = error as FetchError<{ error?: string }>
   if (e?.statusCode === 429) return 'Too many attempts. Wait a minute and try again.'
   return e?.data?.error ?? (e?.statusCode ? fallback : 'Cannot reach the server. Check your connection.')

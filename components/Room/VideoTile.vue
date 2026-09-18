@@ -2,6 +2,7 @@
 import type { Tile } from '~/composables/useConference'
 
 const props = defineProps<{ tile: Tile, compact?: boolean }>()
+const emit = defineEmits<{ 'clear-doodle': [] }>()
 const videoEl = useTemplateRef<HTMLVideoElement>('videoEl')
 
 watch(
@@ -13,7 +14,19 @@ watch(
   { immediate: true }
 )
 
+// A freshly submitted doodle takes over the tile for a moment before settling into the corner.
+const DOODLE_SPOTLIGHT_MS = 10000
+const doodleSpotlight = ref(false)
+let spotlightTimer: ReturnType<typeof setTimeout> | undefined
+
+watch(() => props.tile.doodle, (next, prev) => {
+  clearTimeout(spotlightTimer)
+  doodleSpotlight.value = !!next && next !== prev
+  if (doodleSpotlight.value) spotlightTimer = setTimeout(() => { doodleSpotlight.value = false }, DOODLE_SPOTLIGHT_MS)
+})
+
 onBeforeUnmount(() => {
+  clearTimeout(spotlightTimer)
   if (props.tile.track && videoEl.value) props.tile.track.detach(videoEl.value)
 })
 
@@ -37,6 +50,22 @@ const label = computed(() => {
         :class="compact ? 'w-12 h-12 text-lg' : 'w-20 h-20 text-2xl'">
         {{ initials }}
       </div>
+    </div>
+
+    <div v-if="tile.handRaised && !tile.isScreen"
+      class="absolute right-2 top-2 flex items-center justify-center w-7 h-7 rounded-full bg-amber-400 text-black shadow">
+      <UIcon name="i-lucide-hand" class="text-base" />
+    </div>
+
+    <div v-if="tile.doodle && !tile.isScreen"
+      class="absolute right-2 bottom-2 rounded-md overflow-hidden shadow-lg transition-all duration-500 ease-out"
+      :class="doodleSpotlight ? 'w-[80%] ring-2 ring-white/60' : 'w-20 sm:w-24 ring-1 ring-black/20'">
+      <img :src="tile.doodle" alt="" class="block w-full aspect-[16/10] object-contain bg-white">
+      <button v-if="tile.isLocal" type="button" aria-label="Clear my doodle"
+        class="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/60 text-white flex items-center justify-center"
+        @click.stop="emit('clear-doodle')">
+        <UIcon name="i-lucide-x" class="text-[10px]" />
+      </button>
     </div>
 
     <div class="absolute left-2 bottom-2 flex items-center gap-1.5 max-w-[calc(100%-1rem)] rounded-md bg-black/60 px-2 py-1 text-xs text-white">
