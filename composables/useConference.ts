@@ -30,6 +30,9 @@ export interface Tile {
 export type EndReason = 'left' | 'ended' | 'removed' | 'lost' | null
 
 const CHAT_TOPIC = 'lk.chat'
+// Only a participant may edit its own attributes, so "clear every board" is a request
+// each client applies to itself rather than a write from the host.
+const DOODLE_CLEAR_TOPIC = 'lk.doodle-clear'
 
 /** LiveKit room wrapper exposing plain reactive state for the meeting UI. */
 export const useConference = () => {
@@ -131,6 +134,9 @@ export const useConference = () => {
       .on(RoomEvent.TrackUnmuted, rebuild)
       .on(RoomEvent.ActiveSpeakersChanged, rebuild)
       .on(RoomEvent.ParticipantNameChanged, rebuild)
+      .on(RoomEvent.DataReceived, (_payload, _participant, _kind, topic) => {
+        if (topic === DOODLE_CLEAR_TOPIC) setDoodle('')
+      })
       .on(RoomEvent.ParticipantAttributesChanged, (changed, participant) => {
         rebuild()
         if (changed.hand === '1' && !participant.isLocal) handRaisedEvent.value = { name: participant.name || 'Guest' }
@@ -216,6 +222,17 @@ export const useConference = () => {
     rebuild()
   }
 
+  /** Ask everyone to drop the doodle on their tile, and drop your own. */
+  const clearAllDoodles = async () => {
+    const r = room.value
+    if (!r) return
+    await r.localParticipant.publishData(new Uint8Array(new TextEncoder().encode('clear')), {
+      reliable: true,
+      topic: DOODLE_CLEAR_TOPIC
+    })
+    await setDoodle('')
+  }
+
   const sendMessage = async (text: string) => {
     const r = room.value
     const trimmed = text.trim()
@@ -262,6 +279,7 @@ export const useConference = () => {
     toggleScreenShare,
     toggleHand,
     setDoodle,
+    clearAllDoodles,
     switchDevice,
     sendMessage,
     startAudio

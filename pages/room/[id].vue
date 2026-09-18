@@ -67,6 +67,7 @@ const requireApproval = computed(() => me.value?.room.status === 'private')
 const pendingCount = computed(() => participants.value.filter(p => p.status === 'pending').length)
 const unread = computed(() => (panel.value === 'chat' ? 0 : conf.messages.value.length - lastReadCount.value))
 const onlineIds = computed(() => new Set(conf.tiles.value.map(t => t.identity)))
+const hasDoodles = computed(() => conf.tiles.value.some(t => t.doodle && !t.isScreen))
 const reconnecting = computed(() => conf.connection.value === ConnectionState.Reconnecting)
 
 // ---------- layout ----------
@@ -410,8 +411,9 @@ const endScreens: Partial<Record<Phase, { title: string, body: string, icon: str
           <RoomChatPanel v-if="panel === 'chat'" class="flex-1 min-h-0" :messages="conf.messages.value"
             @send="conf.sendMessage" />
           <RoomPeoplePanel v-else class="flex-1 min-h-0" :participants="participants" :online-ids="onlineIds"
-            :self-id="selfId" :is-admin="isAdmin" :require-approval="requireApproval" @approve="approve" @reject="reject"
-            @remove="remove" @update:require-approval="setRequireApproval" />
+            :self-id="selfId" :is-admin="isAdmin" :require-approval="requireApproval" :has-doodles="hasDoodles"
+            @approve="approve" @reject="reject" @remove="remove" @clear-doodles="conf.clearAllDoodles()"
+            @update:require-approval="setRequireApproval" />
         </aside>
       </div>
 

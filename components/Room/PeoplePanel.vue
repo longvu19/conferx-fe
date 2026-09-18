@@ -7,11 +7,13 @@ const props = defineProps<{
   selfId: string
   isAdmin: boolean
   requireApproval: boolean
+  hasDoodles: boolean
 }>()
 const emit = defineEmits<{
   approve: [string]
   reject: [string]
   remove: [string]
+  'clear-doodles': []
   'update:requireApproval': [boolean]
 }>()
 
@@ -26,6 +28,9 @@ const inMeeting = computed(() =>
   <div class="h-full min-h-0 overflow-y-auto px-4 py-3 space-y-5">
     <USwitch v-if="isAdmin" :model-value="requireApproval" label="Ask before guests join"
       @update:model-value="emit('update:requireApproval', $event)" />
+
+    <UButton v-if="isAdmin && hasDoodles" size="xs" color="error" variant="soft" icon="i-lucide-eraser"
+      label="Clear everyone's drawings" @click="emit('clear-doodles')" />
 
     <section v-if="isAdmin && waiting.length">
       <h3 class="text-sm font-medium text-amber-300 mb-2">Waiting to join ({{ waiting.length }})</h3>

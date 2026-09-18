@@ -14,7 +14,19 @@ watch(
   { immediate: true }
 )
 
+// A freshly submitted doodle takes over the tile for a moment before settling into the corner.
+const DOODLE_SPOTLIGHT_MS = 10000
+const doodleSpotlight = ref(false)
+let spotlightTimer: ReturnType<typeof setTimeout> | undefined
+
+watch(() => props.tile.doodle, (next, prev) => {
+  clearTimeout(spotlightTimer)
+  doodleSpotlight.value = !!next && next !== prev
+  if (doodleSpotlight.value) spotlightTimer = setTimeout(() => { doodleSpotlight.value = false }, DOODLE_SPOTLIGHT_MS)
+})
+
 onBeforeUnmount(() => {
+  clearTimeout(spotlightTimer)
   if (props.tile.track && videoEl.value) props.tile.track.detach(videoEl.value)
 })
 
@@ -45,7 +57,9 @@ const label = computed(() => {
       <UIcon name="i-lucide-hand" class="text-base" />
     </div>
 
-    <div v-if="tile.doodle && !tile.isScreen" class="absolute right-2 bottom-2 w-20 sm:w-24 rounded-md overflow-hidden shadow-lg ring-1 ring-black/20">
+    <div v-if="tile.doodle && !tile.isScreen"
+      class="absolute right-2 bottom-2 rounded-md overflow-hidden shadow-lg transition-all duration-500 ease-out"
+      :class="doodleSpotlight ? 'w-[80%] ring-2 ring-white/60' : 'w-20 sm:w-24 ring-1 ring-black/20'">
       <img :src="tile.doodle" alt="" class="block w-full aspect-[16/10] object-contain bg-white">
       <button v-if="tile.isLocal" type="button" aria-label="Clear my doodle"
         class="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/60 text-white flex items-center justify-center"
