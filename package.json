@@ -29,7 +29,6 @@
     "zod": "^3.25.55"
   },
   "devDependencies": {
-    "nuxt-particles": "^0.3.0",
     "vue-tsc": "^2.2.10"
   }
 }

@@ -334,59 +334,154 @@ const endScreens: Partial<Record<Phase, { title: string, body: string, icon: str
   lost: { title: 'Connection lost', body: 'Check your internet connection, then rejoin.', icon: 'i-lucide-wifi-off' },
   error: { title: 'Could not open the meeting', body: '', icon: 'i-lucide-triangle-alert' }
 }
+
+// ---------- chrome của phòng, theo hướng "Signal" ----------
+// Ba trạng thái của nút trong dock: nghỉ / đang bật / đang tắt.
+const CTL_IDLE = 'bg-control border-white/10 text-ink'
+const CTL_ON = 'bg-signal-500/16 border-signal-500/45 text-signal-300'
+const CTL_OFF = 'bg-danger/16 border-danger/50 text-danger-soft'
+const CTL_WARN = 'bg-warn/16 border-warn/50 text-warn-soft'
+
+// Đồng hồ LIVE: đếm từ lúc vào phòng thật, không phải số trang trí.
+const liveSince = ref<number | null>(null)
+const now = ref(Date.now())
+let clock: ReturnType<typeof setInterval> | undefined
+
+watch(phase, (value) => {
+  if (value === 'live' && liveSince.value === null) {
+    liveSince.value = Date.now()
+    now.value = Date.now()
+    clock = setInterval(() => { now.value = Date.now() }, 1000)
+  }
+  if (value !== 'live' && clock) {
+    clearInterval(clock)
+    clock = undefined
+  }
+})
+onBeforeUnmount(() => clearInterval(clock))
+
+const elapsed = computed(() => {
+  if (liveSince.value === null) return '00:00:00'
+  const s = Math.max(0, Math.floor((now.value - liveSince.value) / 1000))
+  return [Math.floor(s / 3600), Math.floor(s / 60) % 60, s % 60]
+    .map(n => String(n).padStart(2, '0')).join(':')
+})
+
+const inRoom = computed(() => conf.tiles.value.filter(t => !t.isScreen).length)
+
+const copyRoomId = async () => {
+  try {
+    await navigator.clipboard.writeText(roomId.value)
+    toast.add({ title: 'Room code copied', color: 'success', icon: 'i-lucide-check' })
+  } catch {
+    toast.add({ title: 'Copy failed', color: 'error' })
+  }
+}
+
+// Màn hình kết thúc của A: mỗi trạng thái một tông màu riêng.
+const endTone: Record<string, { tone: string, bg: string, border: string, tag: string }> = {
+  ended: { tone: 'text-faint', bg: 'bg-white/5', border: 'border-white/12', tag: 'ENDED' },
+  removed: { tone: 'text-danger-soft', bg: 'bg-danger/10', border: 'border-danger/35', tag: 'REMOVED' },
+  left: { tone: 'text-signal-300', bg: 'bg-signal-500/10', border: 'border-signal-500/35', tag: 'LEFT' },
+  lost: { tone: 'text-warn', bg: 'bg-warn/10', border: 'border-warn/35', tag: 'LOST' },
+  error: { tone: 'text-danger-soft', bg: 'bg-danger/10', border: 'border-danger/35', tag: 'ERROR' }
+}
 </script>
 
 <template>
-  <div class="h-dvh flex flex-col text-white overflow-hidden">
+  <div class="h-dvh flex flex-col bg-canvas text-ink overflow-hidden">
     <!-- Loading / waiting / end states -->
-    <div v-if="phase !== 'live'" class="flex-1 flex items-center justify-center p-6">
-      <div v-if="phase === 'loading' || phase === 'connecting'" class="text-center" role="status">
-        <UIcon name="i-lucide-loader-circle" class="text-4xl animate-spin text-blue-400" />
-        <p class="mt-3 text-gray-300">{{ phase === 'loading' ? 'Opening meeting…' : 'Connecting to the meeting…' }}</p>
+    <div v-if="phase !== 'live'" class="relative flex-1 flex items-center justify-center p-6">
+      <div
+        class="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.02)_1px,transparent_1px)] [background-size:48px_48px] [mask-image:radial-gradient(ellipse_at_50%_45%,#000,transparent_72%)]" />
+
+      <div v-if="phase === 'loading' || phase === 'connecting'" class="relative text-center" role="status">
+        <UIcon name="i-lucide-loader-circle" class="text-4xl animate-spin text-signal-400" />
+        <p class="mt-3 text-muted">{{ phase === 'loading' ? 'Opening meeting…' : 'Connecting to the meeting…' }}</p>
       </div>
 
-      <div v-else-if="phase === 'waiting'" class="max-w-sm text-center" role="status">
-        <UIcon name="i-lucide-hourglass" class="text-4xl text-amber-300" />
-        <h1 class="mt-4 text-2xl font-semibold">Waiting for the host</h1>
-        <p class="mt-2 text-gray-300">You'll join automatically when the host lets you in to <strong>{{ roomId }}</strong>.</p>
-        <UButton class="mt-6" color="neutral" variant="outline" label="Cancel" @click="cancelWaiting" />
+      <div v-else-if="phase === 'waiting'" class="relative max-w-90 text-center" role="status">
+        <div
+          class="mx-auto flex h-14 w-14 items-center justify-center rounded-[14px] border border-warn/35 bg-warn/10 text-warn">
+          <UIcon name="i-lucide-hourglass" class="text-2xl" />
+        </div>
+        <h1 class="mt-5 text-2xl font-semibold tracking-[-.02em]">Waiting for the host</h1>
+        <p class="mt-2.5 text-[15px] leading-[1.6] text-muted">You'll join automatically once you're let in to</p>
+        <div
+          class="mt-3 inline-block rounded-lg border border-signal-500/30 bg-signal-500/[.08] px-3 py-1.75 font-mono text-[13px] tracking-[.08em] text-signal-300">
+          {{ roomId }}
+        </div>
+        <div class="mt-6.5">
+          <button type="button" class="btn-ghost rounded-[10px] px-5 py-2.75 text-sm" @click="cancelWaiting">Cancel</button>
+        </div>
       </div>
 
-      <div v-else-if="endScreens[phase]" class="max-w-sm text-center">
-        <UIcon :name="endScreens[phase]!.icon" class="text-4xl text-gray-300" />
-        <h1 class="mt-4 text-2xl font-semibold">{{ endScreens[phase]!.title }}</h1>
-        <p class="mt-2 text-gray-300">{{ phase === 'error' ? errorMessage : endScreens[phase]!.body }}</p>
-        <div class="mt-6 flex justify-center gap-3">
-          <UButton to="/" color="neutral" variant="outline" label="Back to home" />
-          <UButton v-if="phase === 'left'" label="Rejoin" @click="goToJoin" />
-          <UButton v-if="phase === 'lost' || phase === 'error'" label="Try again" @click="start" />
+      <div v-else-if="endScreens[phase]" class="relative max-w-100 text-center">
+        <div class="flex items-center justify-center gap-3">
+          <span class="flex h-9.5 w-9.5 items-center justify-center rounded-[10px] border"
+            :class="[endTone[phase]?.bg, endTone[phase]?.border, endTone[phase]?.tone]">
+            <UIcon :name="endScreens[phase]!.icon" class="text-lg" />
+          </span>
+          <span class="font-mono text-[10px] tracking-[.16em]" :class="endTone[phase]?.tone">{{ endTone[phase]?.tag }}</span>
+        </div>
+        <h1 class="mt-4.5 text-[21px] font-semibold tracking-[-.02em]">{{ endScreens[phase]!.title }}</h1>
+        <p class="mt-2.25 text-sm leading-[1.6] text-muted">
+          {{ phase === 'error' ? errorMessage : endScreens[phase]!.body }}
+        </p>
+        <div class="mt-5.5 flex justify-center gap-2.5">
+          <NuxtLink to="/" class="btn-ghost rounded-[9px] px-4 py-2.5 text-sm">Back to home</NuxtLink>
+          <button v-if="phase === 'left'" type="button" class="btn-soft rounded-[9px] px-4 py-2.5 text-sm font-medium"
+            @click="goToJoin">Rejoin</button>
+          <button v-if="phase === 'lost' || phase === 'error'" type="button"
+            class="btn-soft rounded-[9px] px-4 py-2.5 text-sm font-medium" @click="start">Try again</button>
         </div>
       </div>
     </div>
 
     <!-- Live meeting -->
     <template v-else>
-      <header class="flex items-center gap-3 px-4 py-2 border-b border-gray-700/50">
-        <NuxtLink to="/" class="shrink-0" aria-label="ConferX home"><img src="/conferx-logo.svg" alt="" class="h-7"></NuxtLink>
-        <span class="text-sm text-gray-300 truncate">{{ roomId }}</span>
-        <UBadge v-if="reconnecting" color="warning" variant="subtle" label="Reconnecting…" />
-        <UButton class="ml-auto" size="sm" color="neutral" variant="ghost" icon="i-lucide-user-plus" label="Invite"
-          @click="inviteOpen = true" />
+      <header class="flex h-14 flex-none items-center gap-4 border-b border-white/6 bg-chrome px-4.5">
+        <NuxtLink to="/" class="shrink-0" aria-label="ConferX home"><img src="/conferx-logo.svg" alt="" class="h-5.5 block"></NuxtLink>
+        <div class="h-5.5 w-px bg-white/8" />
+
+        <button type="button" aria-label="Copy room code"
+          class="flex items-center gap-2 rounded-lg border border-white/8 bg-raised px-2.5 py-1.5 cursor-pointer hover:border-signal-500/45 transition-colors"
+          @click="copyRoomId">
+          <span class="font-mono text-xs tracking-[.06em] text-dim">{{ roomId }}</span>
+          <UIcon name="i-lucide-copy" class="text-[13px] text-muted" />
+        </button>
+
+        <div class="hidden items-center gap-3.5 font-mono text-xs text-muted sm:flex">
+          <span v-if="reconnecting" class="flex items-center gap-1.5 text-warn">
+            <span class="h-[5px] w-[5px] rounded-full bg-warn animate-pulse-dot" />RECONNECTING
+          </span>
+          <span v-else class="flex items-center gap-1.5">
+            <span class="h-[5px] w-[5px] rounded-full bg-online animate-pulse-dot" />LIVE {{ elapsed }}
+          </span>
+          <span>{{ inRoom }} IN ROOM</span>
+        </div>
+
+        <button type="button" class="btn-soft ml-auto rounded-lg px-3.5 py-2 text-sm" @click="inviteOpen = true">
+          <UIcon name="i-lucide-user-plus" class="text-[15px]" />Invite
+        </button>
       </header>
 
-      <div v-if="!conf.canPlayAudio.value" class="bg-amber-500/15 text-amber-200 text-sm px-4 py-2 flex items-center gap-3">
+      <div v-if="!conf.canPlayAudio.value"
+        class="flex flex-none items-center gap-3 border-b border-warn/25 bg-warn/12 px-4.5 py-2 text-sm text-warn-soft">
         <span>Your browser blocked meeting audio.</span>
-        <UButton size="xs" color="warning" label="Turn on sound" @click="conf.startAudio()" />
+        <button type="button"
+          class="rounded-md border border-warn/45 px-2.5 py-1 text-xs font-medium text-warn-soft cursor-pointer hover:bg-warn/15"
+          @click="conf.startAudio()">Turn on sound</button>
       </div>
 
-      <div class="flex-1 min-h-0 flex relative">
-        <main class="flex-1 min-w-0 p-3">
-          <div v-if="screenTile" class="h-full flex flex-col lg:flex-row gap-3">
-            <div class="flex-1 min-h-0 min-w-0">
+      <div class="relative flex min-h-0 flex-1">
+        <main class="flex min-w-0 flex-1 flex-col gap-3 p-4">
+          <div v-if="screenTile" class="flex h-full min-h-0 flex-col gap-3 lg:flex-row">
+            <div class="min-h-0 min-w-0 flex-1">
               <RoomVideoTile :tile="screenTile" />
             </div>
-            <div class="flex lg:flex-col gap-3 overflow-auto lg:w-56 h-28 lg:h-auto shrink-0">
-              <div v-for="tile in cameraTiles" :key="tile.key" class="aspect-video w-44 lg:w-full shrink-0">
+            <div class="flex h-28 shrink-0 gap-3 overflow-auto lg:h-auto lg:w-56 lg:flex-col">
+              <div v-for="tile in cameraTiles" :key="tile.key" class="aspect-video w-44 shrink-0 lg:w-full">
                 <RoomVideoTile :tile="tile" compact @clear-doodle="submitDoodle('')" />
               </div>
             </div>
@@ -395,87 +490,133 @@ const endScreens: Partial<Record<Phase, { title: string, body: string, icon: str
             :active="wb.active.value" :can-undo="wb.canUndo.value" :start-stroke="wb.startStroke"
             :add-point="wb.addPoint" :end-stroke="wb.endStroke" :undo="wb.undo" :clear="wb.clear"
             @close="whiteboardOpen = false" @submit="submitDoodle" />
-          <div v-else ref="stage" class="h-full flex flex-wrap items-center justify-center content-center gap-3">
+          <div v-else ref="stage" class="flex h-full flex-wrap content-center items-center justify-center gap-3">
             <div v-for="tile in cameraTiles" :key="tile.key" class="aspect-video" :style="{ width: `${tileWidth}px` }">
               <RoomVideoTile :tile="tile" :compact="tileWidth < 360" @clear-doodle="submitDoodle('')" />
+            </div>
+          </div>
+
+          <!-- Dock điều khiển: viên thuốc nổi, không còn thanh dưới đặc -->
+          <div class="flex flex-none items-center justify-center">
+            <div
+              class="flex items-center gap-2 rounded-full border border-white/8 bg-tile px-3.5 py-2.5 shadow-[0_20px_50px_-20px_rgba(0,0,0,.9)]">
+              <div class="group relative">
+                <button type="button" :aria-label="conf.micOn.value ? 'Mute microphone' : 'Unmute microphone'"
+                  class="flex h-11.5 w-11.5 cursor-pointer items-center justify-center rounded-full border transition-[filter] hover:brightness-125"
+                  :class="conf.micOn.value ? CTL_IDLE : CTL_OFF" @click="conf.toggleMic()">
+                  <UIcon :name="conf.micOn.value ? 'i-lucide-mic' : 'i-lucide-mic-off'" class="text-xl" />
+                </button>
+                <UDropdownMenu v-if="microphones.length > 1" v-model:open="micMenuOpen" :items="micItems"
+                  :content="{ side: 'top', align: 'center', sideOffset: 12 }">
+                  <button type="button" aria-label="Choose microphone"
+                    class="absolute -top-2.5 left-1/2 flex h-5 w-5 -translate-x-1/2 scale-75 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-control text-dim opacity-0 ring-2 ring-tile transition-all duration-150 pointer-events-none group-hover:pointer-events-auto group-hover:scale-100 group-hover:opacity-100"
+                    :class="micMenuOpen && 'opacity-100 scale-100 pointer-events-auto'">
+                    <UIcon name="i-lucide-chevron-up" class="text-xs" />
+                  </button>
+                </UDropdownMenu>
+              </div>
+
+              <div class="group relative">
+                <button type="button" :aria-label="conf.camOn.value ? 'Turn off camera' : 'Turn on camera'"
+                  class="flex h-11.5 w-11.5 cursor-pointer items-center justify-center rounded-full border transition-[filter] hover:brightness-125"
+                  :class="conf.camOn.value ? CTL_IDLE : CTL_OFF" @click="conf.toggleCamera()">
+                  <UIcon :name="conf.camOn.value ? 'i-lucide-video' : 'i-lucide-video-off'" class="text-xl" />
+                </button>
+                <UDropdownMenu v-if="cameras.length > 1" v-model:open="camMenuOpen" :items="camItems"
+                  :content="{ side: 'top', align: 'center', sideOffset: 12 }">
+                  <button type="button" aria-label="Choose camera"
+                    class="absolute -top-2.5 left-1/2 flex h-5 w-5 -translate-x-1/2 scale-75 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-control text-dim opacity-0 ring-2 ring-tile transition-all duration-150 pointer-events-none group-hover:pointer-events-auto group-hover:scale-100 group-hover:opacity-100"
+                    :class="camMenuOpen && 'opacity-100 scale-100 pointer-events-auto'">
+                    <UIcon name="i-lucide-chevron-up" class="text-xs" />
+                  </button>
+                </UDropdownMenu>
+              </div>
+
+              <button type="button" :aria-label="conf.screenOn.value ? 'Stop presenting' : 'Present screen'"
+                class="hidden h-11.5 w-11.5 cursor-pointer items-center justify-center rounded-full border transition-[filter] hover:brightness-125 sm:flex"
+                :class="conf.screenOn.value ? CTL_ON : CTL_IDLE" @click="conf.toggleScreenShare()">
+                <UIcon name="i-lucide-monitor-up" class="text-xl" />
+              </button>
+
+              <button type="button" :aria-label="conf.handRaised.value ? 'Lower hand' : 'Raise hand'"
+                class="flex h-11.5 w-11.5 cursor-pointer items-center justify-center rounded-full border transition-[filter] hover:brightness-125"
+                :class="conf.handRaised.value ? CTL_WARN : CTL_IDLE" @click="conf.toggleHand()">
+                <UIcon name="i-lucide-hand" class="text-xl" />
+              </button>
+
+              <button type="button" :aria-label="whiteboardOpen ? 'Close whiteboard' : 'Open whiteboard'"
+                class="hidden h-11.5 w-11.5 cursor-pointer items-center justify-center rounded-full border transition-[filter] hover:brightness-125 sm:flex"
+                :class="whiteboardOpen ? CTL_ON : CTL_IDLE" @click="toggleWhiteboard()">
+                <UIcon name="i-lucide-pencil" class="text-xl" />
+              </button>
+
+              <div class="mx-1.5 h-6.5 w-px bg-white/9" />
+
+              <button type="button" aria-label="Chat"
+                class="relative flex h-11.5 w-11.5 cursor-pointer items-center justify-center rounded-full border transition-[filter] hover:brightness-125"
+                :class="panel === 'chat' ? CTL_ON : CTL_IDLE" @click="togglePanel('chat')">
+                <UIcon name="i-lucide-message-square" class="text-xl" />
+                <span v-if="unread > 0"
+                  class="absolute -right-1 -top-1 flex h-4.75 min-w-4.75 items-center justify-center rounded-full border-2 border-tile bg-signal-500 px-1.25 font-mono text-[11px] font-medium text-abyss">{{ unread }}</span>
+              </button>
+
+              <button type="button" aria-label="People"
+                class="relative flex h-11.5 w-11.5 cursor-pointer items-center justify-center rounded-full border transition-[filter] hover:brightness-125"
+                :class="panel === 'people' ? CTL_ON : CTL_IDLE" @click="togglePanel('people')">
+                <UIcon name="i-lucide-users" class="text-xl" />
+                <span v-if="isAdmin && pendingCount > 0"
+                  class="absolute -right-1 -top-1 flex h-4.75 min-w-4.75 items-center justify-center rounded-full border-2 border-tile bg-warn px-1.25 font-mono text-[11px] font-medium text-[#1a1206]">{{ pendingCount }}</span>
+              </button>
+
+              <div class="mx-1.5 h-6.5 w-px bg-white/9" />
+
+              <button type="button" class="btn-danger h-11.5 rounded-full px-5 text-[15px] font-medium" @click="leave">
+                <UIcon name="i-lucide-phone-off" class="text-lg" />Leave
+              </button>
+              <button v-if="isAdmin" type="button"
+                class="hidden h-11.5 cursor-pointer items-center rounded-full border border-danger/45 px-4 text-sm text-danger-soft transition-colors hover:bg-danger/12 sm:inline-flex"
+                @click="confirmEndOpen = true">End for all</button>
             </div>
           </div>
         </main>
 
         <aside v-if="panel"
-          class="absolute inset-0 z-10 sm:static sm:w-80 flex flex-col bg-[#141926] sm:bg-black/30 sm:border-l border-gray-700/50">
-          <div class="flex items-center justify-between px-4 py-3 border-b border-gray-700/50">
-            <h2 class="font-medium">{{ panel === 'chat' ? 'Chat' : 'People' }}</h2>
-            <UButton icon="i-lucide-x" size="sm" color="neutral" variant="ghost" aria-label="Close panel" @click="panel = null" />
+          class="absolute inset-0 z-10 flex flex-col bg-chrome sm:static sm:w-86 sm:border-l sm:border-white/6">
+          <div class="flex flex-none gap-1 border-b border-white/6 p-3">
+            <button type="button" class="flex-1 cursor-pointer rounded-lg border px-3 py-2.25 text-sm transition-colors"
+              :class="panel === 'chat'
+                ? 'border-signal-500/35 bg-signal-500/12 font-medium text-signal-300'
+                : 'border-transparent bg-transparent text-muted hover:bg-white/4'" @click="panel = 'chat'">Chat</button>
+            <button type="button" class="flex-1 cursor-pointer rounded-lg border px-3 py-2.25 text-sm transition-colors"
+              :class="panel === 'people'
+                ? 'border-signal-500/35 bg-signal-500/12 font-medium text-signal-300'
+                : 'border-transparent bg-transparent text-muted hover:bg-white/4'"
+              @click="panel = 'people'">People · {{ participants.length }}</button>
+            <button type="button" aria-label="Close panel"
+              class="flex h-9 w-9 flex-none cursor-pointer items-center justify-center rounded-lg border border-white/8 text-muted transition-colors hover:text-ink"
+              @click="panel = null">
+              <UIcon name="i-lucide-x" class="text-base" />
+            </button>
           </div>
-          <RoomChatPanel v-if="panel === 'chat'" class="flex-1 min-h-0" :messages="conf.messages.value"
+          <RoomChatPanel v-if="panel === 'chat'" class="min-h-0 flex-1" :messages="conf.messages.value"
             @send="conf.sendMessage" />
-          <RoomPeoplePanel v-else class="flex-1 min-h-0" :participants="participants" :online-ids="onlineIds"
+          <RoomPeoplePanel v-else class="min-h-0 flex-1" :participants="participants" :online-ids="onlineIds"
             :self-id="selfId" :is-admin="isAdmin" :require-approval="requireApproval" :has-doodles="hasDoodles"
             @approve="approve" @reject="reject" @remove="remove" @clear-doodles="conf.clearAllDoodles()"
             @update:require-approval="setRequireApproval" />
         </aside>
       </div>
 
-      <footer class="flex items-center justify-center gap-2 sm:gap-3 px-4 py-3 border-t border-gray-700/50">
-        <div class="relative group">
-          <UButton :icon="conf.micOn.value ? 'i-lucide-mic' : 'i-lucide-mic-off'" size="xl" class="rounded-full"
-            :color="conf.micOn.value ? 'neutral' : 'error'" :variant="conf.micOn.value ? 'soft' : 'solid'"
-            :aria-label="conf.micOn.value ? 'Mute microphone' : 'Unmute microphone'" @click="conf.toggleMic()" />
-          <UDropdownMenu v-if="microphones.length > 1" v-model:open="micMenuOpen" :items="micItems"
-            :content="{ side: 'top', align: 'center', sideOffset: 12 }">
-            <UButton icon="i-lucide-chevron-up" size="xs" color="neutral" variant="solid"
-              class="absolute -top-2.5 left-1/2 -translate-x-1/2 rounded-full p-1 opacity-0 scale-75 pointer-events-none transition-all duration-150 group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto ring-2 ring-[#141926]"
-              :class="micMenuOpen && 'opacity-100 scale-100 pointer-events-auto'" aria-label="Choose microphone" />
-          </UDropdownMenu>
-        </div>
-        <div class="relative group">
-          <UButton :icon="conf.camOn.value ? 'i-lucide-video' : 'i-lucide-video-off'" size="xl" class="rounded-full"
-            :color="conf.camOn.value ? 'neutral' : 'error'" :variant="conf.camOn.value ? 'soft' : 'solid'"
-            :aria-label="conf.camOn.value ? 'Turn off camera' : 'Turn on camera'" @click="conf.toggleCamera()" />
-          <UDropdownMenu v-if="cameras.length > 1" v-model:open="camMenuOpen" :items="camItems"
-            :content="{ side: 'top', align: 'center', sideOffset: 12 }">
-            <UButton icon="i-lucide-chevron-up" size="xs" color="neutral" variant="solid"
-              class="absolute -top-2.5 left-1/2 -translate-x-1/2 rounded-full p-1 opacity-0 scale-75 pointer-events-none transition-all duration-150 group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto ring-2 ring-[#141926]"
-              :class="camMenuOpen && 'opacity-100 scale-100 pointer-events-auto'" aria-label="Choose camera" />
-          </UDropdownMenu>
-        </div>
-        <UButton icon="i-lucide-monitor-up" size="xl" class="rounded-full hidden sm:inline-flex"
-          :color="conf.screenOn.value ? 'primary' : 'neutral'" :variant="conf.screenOn.value ? 'solid' : 'soft'"
-          :aria-label="conf.screenOn.value ? 'Stop presenting' : 'Present screen'" @click="conf.toggleScreenShare()" />
-        <UButton icon="i-lucide-hand" size="xl" class="rounded-full"
-          :color="conf.handRaised.value ? 'warning' : 'neutral'" :variant="conf.handRaised.value ? 'solid' : 'soft'"
-          :aria-label="conf.handRaised.value ? 'Lower hand' : 'Raise hand'" @click="conf.toggleHand()" />
-        <UButton icon="i-lucide-pencil" size="xl" class="rounded-full hidden sm:inline-flex"
-          :color="whiteboardOpen ? 'primary' : 'neutral'" :variant="whiteboardOpen ? 'solid' : 'soft'"
-          :aria-label="whiteboardOpen ? 'Close whiteboard' : 'Open whiteboard'" @click="toggleWhiteboard()" />
-
-        <div class="w-px h-8 bg-gray-700 mx-1" />
-
-        <UChip :show="unread > 0" :text="unread" size="3xl" color="primary">
-          <UButton icon="i-lucide-message-square" size="xl" class="rounded-full"
-            :color="panel === 'chat' ? 'primary' : 'neutral'" variant="soft" aria-label="Chat" @click="togglePanel('chat')" />
-        </UChip>
-        <UChip :show="isAdmin && pendingCount > 0" :text="pendingCount" size="3xl" color="warning">
-          <UButton icon="i-lucide-users" size="xl" class="rounded-full"
-            :color="panel === 'people' ? 'primary' : 'neutral'" variant="soft" aria-label="People" @click="togglePanel('people')" />
-        </UChip>
-
-        <div class="w-px h-8 bg-gray-700 mx-1" />
-
-        <UButton icon="i-lucide-phone-off" size="xl" color="error" label="Leave" class="rounded-full" @click="leave" />
-        <UButton v-if="isAdmin" size="xl" color="error" variant="outline" label="End for all" class="rounded-full hidden sm:inline-flex"
-          @click="confirmEndOpen = true" />
-      </footer>
-
       <RoomInviteDialog v-model:open="inviteOpen" :room-id="roomId" :password="me?.room.room_password" />
 
       <UModal v-model:open="confirmEndOpen" title="End the meeting for everyone?"
         description="Everyone will be disconnected and the meeting can't be restarted.">
         <template #footer>
-          <div class="flex justify-end gap-3 w-full">
-            <UButton label="Cancel" color="neutral" variant="outline" @click="confirmEndOpen = false" />
-            <UButton label="End meeting" color="error" @click="endForAll" />
+          <div class="flex w-full justify-end gap-3">
+            <button type="button" class="btn-ghost rounded-[10px] px-4 py-2.5 text-sm"
+              @click="confirmEndOpen = false">Cancel</button>
+            <button type="button" class="btn-danger rounded-[10px] px-4 py-2.5 text-sm font-medium"
+              @click="endForAll">End meeting</button>
           </div>
         </template>
       </UModal>

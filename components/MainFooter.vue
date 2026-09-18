@@ -1,12 +1,14 @@
 <template>
-  <footer id="footer" class="px-6 py-8 border-t border-gray-600/50">
-    <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center">
-        <div class="flex items-center space-x-3 mb-4 md:mb-0">
-            <img src="/conferx-logo.svg" alt="ConferX Logo" class="h-10">
-        </div>
-        <div class="flex items-center space-x-6 text-gray-400">
-            <p>&copy; 2025 ConferX. Made with ❤️</p>
-        </div>
+  <footer id="footer" class="relative mt-22 border-t border-white/7 px-6 py-9 sm:px-12">
+    <div class="mx-auto flex max-w-360 flex-col items-center justify-between gap-4 sm:flex-row">
+      <NuxtLink to="/" aria-label="ConferX home">
+        <img src="/conferx-logo.svg" alt="ConferX" class="h-6 block opacity-75">
+      </NuxtLink>
+      <div class="flex items-center gap-7">
+        <NuxtLink to="/" class="text-[13px] text-muted hover:text-ink transition-colors">Privacy</NuxtLink>
+        <NuxtLink to="/" class="text-[13px] text-muted hover:text-ink transition-colors">Terms</NuxtLink>
+        <span class="font-mono text-[11px] tracking-[.06em] text-faint">© 2026 CONFERX</span>
+      </div>
     </div>
-</footer>
+  </footer>
 </template>

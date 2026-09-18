@@ -115,13 +115,13 @@ const submit = () => {
 }
 </script>
 <template>
-  <div class="h-full flex flex-col bg-gray-900 rounded-xl overflow-hidden">
-    <div class="flex items-center gap-2 px-3 py-2 border-b border-gray-700/50 bg-[#141926] overflow-x-auto">
+  <div class="h-full flex flex-col bg-tile rounded-[14px] overflow-hidden">
+    <div class="flex items-center gap-2 px-3 py-2 border-b border-white/6 bg-chrome overflow-x-auto">
       <button v-for="c in COLORS" :key="c" type="button" class="w-6 h-6 shrink-0 rounded-full ring-2 transition-shadow"
         :style="{ background: c }" :class="!eraser && color === c ? 'ring-white' : 'ring-transparent'"
         :aria-label="`Color ${c}`" @click="color = c; eraser = false" />
 
-      <div class="w-px h-6 bg-gray-700 mx-1 shrink-0" />
+      <div class="w-px h-6 bg-white/9 mx-1 shrink-0" />
 
       <button v-for="w in WIDTHS" :key="w" type="button"
         class="w-7 h-7 shrink-0 rounded-full flex items-center justify-center transition-colors"
@@ -130,7 +130,7 @@ const submit = () => {
         <span class="rounded-full bg-white" :style="{ width: `${w + 2}px`, height: `${w + 2}px` }" />
       </button>
 
-      <div class="w-px h-6 bg-gray-700 mx-1 shrink-0" />
+      <div class="w-px h-6 bg-white/9 mx-1 shrink-0" />
 
       <UButton icon="i-lucide-eraser" size="xs" :variant="eraser ? 'solid' : 'ghost'"
         :color="eraser ? 'primary' : 'neutral'" aria-label="Eraser" @click="eraser = !eraser" />
@@ -146,7 +146,7 @@ const submit = () => {
         aria-label="Close whiteboard" @click="emit('close')" />
     </div>
 
-    <p class="px-3 py-1.5 text-xs text-gray-400 border-b border-gray-700/50 bg-[#141926]/60">
+    <p class="px-3 py-1.5 font-mono text-[11px] tracking-[.04em] text-faint border-b border-white/6 bg-chrome/60">
       This is your own scratchpad. Press Submit to post it on your video tile for everyone to see.
     </p>
 

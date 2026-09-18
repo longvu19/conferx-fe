@@ -95,8 +95,9 @@ export const useAuth = () => {
     setSession(await request<AuthResponse>('/me', { method: 'PATCH', body: { display_name: displayName } }))
   }
 
-  const changePassword = (currentPassword: string, newPassword: string) =>
-    request<void>('/me/password', { method: 'POST', body: { current_password: currentPassword, new_password: newPassword } })
+  const changePassword = async (currentPassword: string, newPassword: string): Promise<void> => {
+    await request('/me/password', { method: 'POST', body: { current_password: currentPassword, new_password: newPassword } })
+  }
 
   return { user, token, ready, refresh, register, login, logout, updateProfile, changePassword }
 }

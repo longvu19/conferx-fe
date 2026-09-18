@@ -124,9 +124,13 @@ export const useRoomApi = () => {
     getParticipants: (roomId: string) => authed<ParticipantInfo[]>(roomId, '/participants'),
     setParticipantStatus: (roomId: string, uid: string, status: 'approved' | 'rejected') =>
       authed<ParticipantInfo>(roomId, `/participants/${uid}`, { method: 'PATCH', body: { status } }),
-    removeParticipant: (roomId: string, uid: string) => authed<void>(roomId, `/participants/${uid}`, { method: 'DELETE' }),
+    removeParticipant: async (roomId: string, uid: string): Promise<void> => {
+      await authed(roomId, `/participants/${uid}`, { method: 'DELETE' })
+    },
     setRoomStatus: (roomId: string, status: 'open' | 'private') => authed(roomId, '', { method: 'PATCH', body: { status } }),
-    endRoom: (roomId: string) => authed<void>(roomId, '/end', { method: 'POST' }),
+    endRoom: async (roomId: string): Promise<void> => {
+      await authed(roomId, '/end', { method: 'POST' })
+    },
     getMediaToken: (roomId: string) => authed<{ token: string, url: string }>(roomId, '/media-token', { method: 'POST' })
   }
 }

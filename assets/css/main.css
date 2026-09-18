@@ -1,23 +1,224 @@
 @import 'tailwindcss';
 @import "@nuxt/ui";
 
-@theme {
-  --font-sans: 'Inter', sans-serif;
-  --animate-gradient-xy: gradient-xy 15s ease infinite;
+/*
+ * ConferX — "Signal" (deep space · control room)
+ * Nền gần đen phẳng, hairline sáng, một điểm nhấn xanh duy nhất.
+ * Không còn gradient tím–xanh: bề mặt phẳng + viền phát sáng thay thế.
+ */
+/* `static` là bắt buộc: Nuxt UI map --ui-color-primary-* sang var(--color-signal-*)
+ * với fallback rỗng, nên nếu Tailwind tree-shake một bậc chưa utility nào dùng thì
+ * bậc đó thành rỗng và các variant của UButton mất màu. `static` emit trọn thang. */
+@theme static {
+  --font-sans: 'Instrument Sans', Helvetica, Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 
-  @keyframes gradient-xy {
-    0% {
-      background-position: 0% 0%;
-    }
-    50% {
-      background-position: 100% 100%;
-    }
-    100% {
-      background-position: 0% 0%;
-    }
+  /* Bề mặt, từ sâu nhất ra ngoài */
+  --color-abyss:   #04060a;
+  --color-canvas:  #06080b;
+  --color-well:    #070a0f;
+  --color-sunk:    #080b10;
+  --color-chrome:  #080b11;
+  --color-panel:   #0a0d13;
+  --color-tile:    #0a0e15;
+  --color-raised:  #0c1017;
+  --color-lift:    #0d1119;
+  --color-control: #111722;
+
+  /* Chữ */
+  --color-display: #f5f7fa;
+  --color-ink:     #edf0f5;
+  --color-dim:     #c7cedb;
+  --color-muted:   #8a93a3;
+  --color-faint:   #9aa3b2;
+
+  /* Signal — thang màu nhấn, cũng là primary của Nuxt UI */
+  --color-signal-50:  #eef4fb;
+  --color-signal-100: #d9e6f6;
+  --color-signal-200: #b9d2ef;
+  --color-signal-300: #9cc6f7;
+  --color-signal-400: #6ba6f0;
+  --color-signal-500: #4680ca;
+  --color-signal-600: #3a74b6;
+  --color-signal-700: #31609a;
+  --color-signal-800: #2b5080;
+  --color-signal-900: #274468;
+  --color-signal-950: #16263c;
+
+  /* Trạng thái */
+  --color-online:      #4ea87a;
+  --color-warn:        #d9a15b;
+  --color-warn-soft:   #e6bd84;
+  --color-danger:      #d9736e;
+  --color-danger-soft: #e79a95;
+
+  --animate-sweep: sweep 6s linear infinite;
+  --animate-pulse-dot: pulse-dot 2s ease-in-out infinite;
+
+  @keyframes sweep {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(300%); }
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: .35; }
   }
 }
 
-#tsparticles {
-  contain: layout;
+@layer components {
+  /* Nút chính: gradient xanh + quầng sáng. Dùng ở mọi hành động chốt. */
+  .btn-signal {
+    display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+    font-weight: 600; color: #fff; cursor: pointer;
+    border: 1px solid #5d9ada;
+    background: linear-gradient(180deg, #4f8fd4, #3a74b6);
+    box-shadow: 0 12px 30px -14px rgba(70, 128, 202, .7);
+    transition: background .15s ease;
+  }
+  .btn-signal:hover { background: linear-gradient(180deg, #5b9ade, #4380c4); }
+  .btn-signal:disabled { opacity: .6; cursor: not-allowed; }
+
+  /* Nút phụ: nền xanh mờ, viền xanh. */
+  .btn-soft {
+    display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+    cursor: pointer; color: var(--color-signal-300);
+    border: 1px solid color-mix(in srgb, var(--color-signal-500) 45%, transparent);
+    background: color-mix(in srgb, var(--color-signal-500) 14%, transparent);
+    transition: background .15s ease;
+  }
+  .btn-soft:hover { background: color-mix(in srgb, var(--color-signal-500) 22%, transparent); }
+  .btn-soft:disabled { opacity: .6; cursor: not-allowed; }
+
+  /* Nút viền trung tính. */
+  .btn-ghost {
+    display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+    cursor: pointer; color: var(--color-dim);
+    border: 1px solid rgba(255, 255, 255, .12);
+    background: transparent;
+    transition: background .15s ease;
+  }
+  .btn-ghost:hover { background: rgba(255, 255, 255, .05); }
+  .btn-ghost:disabled { opacity: .6; cursor: not-allowed; }
+
+  /* Nút rời phòng / huỷ. */
+  .btn-danger {
+    display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+    cursor: pointer; color: var(--color-danger-soft);
+    border: 1px solid color-mix(in srgb, var(--color-danger) 50%, transparent);
+    background: color-mix(in srgb, var(--color-danger) 14%, transparent);
+    transition: background .15s ease;
+  }
+  .btn-danger:hover { background: color-mix(in srgb, var(--color-danger) 22%, transparent); }
+
+  /* Ô nhập: giếng tối, viền hairline, focus lên xanh. */
+  .field {
+    width: 100%; box-sizing: border-box;
+    background: var(--color-well);
+    border: 1px solid rgba(255, 255, 255, .1);
+    border-radius: .625rem;
+    padding: .8125rem .875rem;
+    font-size: .9375rem; color: var(--color-ink);
+    outline: none;
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  .field::placeholder { color: var(--color-muted); }
+  .field:focus {
+    border-color: color-mix(in srgb, var(--color-signal-500) 55%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-signal-500) 12%, transparent);
+  }
+  .field:disabled { background: var(--color-raised); color: var(--color-faint); }
+
+  /* Nhãn mono viết hoa — chạy suốt hệ thống. */
+  .label-mono {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: .625rem; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--color-muted);
+  }
+
+  /* Nhãn section kiểu "01 / WHAT YOU GET". */
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: .6875rem; letter-spacing: .14em;
+    color: var(--color-signal-500);
+  }
+
+  /* Thẻ panel nổi. */
+  .card {
+    border: 1px solid rgba(255, 255, 255, .1);
+    border-radius: 1rem;
+    background: linear-gradient(180deg, #0e131d, #0a0d14);
+    box-shadow: 0 40px 90px -30px rgba(0, 0, 0, .9);
+  }
+
+  /* Lưới mảnh 72px phủ nền, mờ dần xuống dưới. */
+  .grid-veil {
+    position: absolute; inset: 0; pointer-events: none;
+    background-image:
+      linear-gradient(rgba(255, 255, 255, .022) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, .022) 1px, transparent 1px);
+    background-size: 72px 72px;
+    -webkit-mask-image: linear-gradient(180deg, #000 0, #000 46%, transparent 92%);
+    mask-image: linear-gradient(180deg, #000 0, #000 46%, transparent 92%);
+  }
+
+  /* Lưới sáng chỉ hiện quanh con trỏ. Cần --mx/--my từ v-spotlight. */
+  .grid-spot {
+    position: absolute; inset: 0; pointer-events: none;
+    background-image:
+      linear-gradient(rgba(140, 185, 240, .5) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(140, 185, 240, .5) 1px, transparent 1px);
+    background-size: 72px 72px;
+    -webkit-mask-image: radial-gradient(190px circle at var(--mx, -999px) var(--my, -999px), #000 0%, rgba(0, 0, 0, .45) 45%, transparent 72%);
+    mask-image: radial-gradient(190px circle at var(--mx, -999px) var(--my, -999px), #000 0%, rgba(0, 0, 0, .45) 45%, transparent 72%);
+  }
+
+  /* Kính lỏng tràn viền — dùng làm NỀN của cả một dải ngang, không phải card.
+   * Đặt như một lớp phủ absolute inset-0; nội dung của dải nằm trên nó.
+   * Chỉ hiện rõ khi phía sau có thứ gì đó (bloom, lưới) để blur khúc xạ:
+   * trên nền phẳng tuyệt đối thì gần như vô hình.
+   * Không bo góc và chỉ hairline trên/dưới — viền trái/phải sẽ cắt ngang màn hình. */
+  .glass-band {
+    background: linear-gradient(160deg,
+        rgba(255, 255, 255, .06),
+        rgba(255, 255, 255, .015) 45%,
+        rgba(255, 255, 255, .04));
+    backdrop-filter: blur(26px) saturate(165%);
+    -webkit-backdrop-filter: blur(26px) saturate(165%);
+    border-top: 1px solid rgba(255, 255, 255, .1);
+    border-bottom: 1px solid rgba(255, 255, 255, .07);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, .12),
+      inset 0 -1px 0 rgba(255, 255, 255, .03);
+  }
+
+  /* Vệt sáng mảnh chạy dọc mép trên, cho mặt kính một cạnh sáng. */
+  .glass-band::after {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto;
+    height: 1px;
+    background: linear-gradient(90deg,
+        transparent,
+        rgba(255, 255, 255, .28) 18%,
+        rgba(70, 128, 202, .45) 52%,
+        rgba(255, 255, 255, .22) 82%,
+        transparent);
+    pointer-events: none;
+  }
+
+  /* Ảnh người thật trong khung sản phẩm ở landing.
+   * Giữ nguyên màu (không grayscale) — chỉ tối nhẹ + giảm bão hoà một chút để
+   * ảnh nằm chung tông với nền deep space, không phải xám hoá thành tư liệu cũ.
+   * Đây là bước chỉnh nhanh bằng CSS: khi chốt được tông, nên nướng thẳng vào
+   * file ảnh để trình duyệt khỏi phải filter lúc chạy. */
+  .feed-photo {
+    filter: brightness(.92) contrast(1.05) saturate(.9);
+  }
+
+  /* Quầng xanh bám con trỏ, đi kèm .grid-spot. */
+  .glow-spot {
+    position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(320px circle at var(--mx, -999px) var(--my, -999px), rgba(70, 128, 202, .1), rgba(70, 128, 202, 0) 70%);
+  }
 }

@@ -16,17 +16,12 @@ export default defineNuxtConfig({
     '@nuxt/fonts',
     '@nuxt/image',
     '@nuxt/ui',
-    'nuxt-particles',
     '@pinia/nuxt',
     '@nuxtjs/tailwindcss'
   ],
   runtimeConfig: {
     // Gateway the Nuxt server proxies /api/** to. Override with NUXT_API_BASE.
     apiBase: 'http://localhost:9080'
-  },
-  particles: {
-    mode: 'full', // 'full' | 'slim' | 'basic' | 'custom'
-    lazy: true
   },
   vite: {
     vue: {
@@ -45,11 +40,19 @@ export default defineNuxtConfig({
     provider: 'google',
     families: [
       {
-        name: 'Inter',
+        name: 'Instrument Sans',
         display: 'swap',
-        weights: [200, 400, 500, 600],
-        styles: ['normal', 'italic'],
-        fallbacks: ['Roboto'],
+        weights: [400, 500, 600, 700],
+        styles: ['normal'],
+        fallbacks: ['Helvetica', 'Arial'],
+      },
+      {
+        // Mã phòng, số liệu, nhãn — mọi thứ cần cảm giác hạ tầng real-time.
+        name: 'JetBrains Mono',
+        display: 'swap',
+        weights: [400, 500],
+        styles: ['normal'],
+        fallbacks: ['ui-monospace', 'monospace'],
       }
     ]
   }

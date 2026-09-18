@@ -18,32 +18,57 @@ const copy = async (text: string, what: string) => {
 }
 </script>
 <template>
-  <UModal v-model:open="open" title="Invite people" class="w-[480px] max-w-full">
-    <template #description>
-      <span>Share the link and the meeting password. Keep your admin password private.</span>
-    </template>
-    <template #body>
-      <dl class="space-y-4">
-        <div>
-          <dt class="text-sm text-gray-400 mb-1">Link</dt>
-          <dd class="flex gap-2">
-            <UInput :model-value="link" readonly variant="soft" class="flex-1" aria-label="Meeting link" />
-            <UButton icon="i-lucide-copy" color="neutral" variant="soft" aria-label="Copy link" @click="copy(link, 'Link')" />
-          </dd>
+  <!-- Cùng lý do như RoomSettingsPopup: khung ngoài UModal tự vẽ bo góc 8px không clip,
+       lộ vệt lưỡi liềm quanh 4 góc của .card bo 16px bên trong. Tắt hẳn trang trí ngoài. -->
+  <UModal v-model:open="open" class="w-120 max-w-full bg-transparent rounded-none shadow-none ring-0">
+    <template #content>
+      <div class="card overflow-hidden">
+        <div class="border-b border-white/7 px-6 py-5.5">
+          <div class="eyebrow">INVITE PEOPLE</div>
+          <p class="mt-2.5 text-sm leading-[1.55] text-muted">
+            Share the link and the meeting password. Keep your admin password private.
+          </p>
         </div>
-        <div>
-          <dt class="text-sm text-gray-400 mb-1">Meeting password</dt>
-          <dd class="flex gap-2">
-            <UInput :model-value="password ?? 'Only the admin can see this'" readonly variant="soft"
-              class="flex-1 font-medium tracking-widest" aria-label="Meeting password" />
-            <UButton v-if="password" icon="i-lucide-copy" color="neutral" variant="soft" aria-label="Copy password"
-              @click="copy(password, 'Password')" />
-          </dd>
+
+        <dl class="flex flex-col gap-4.5 p-6">
+          <div>
+            <dt class="label-mono mb-1.75">LINK</dt>
+            <dd class="flex gap-2">
+              <div
+                class="min-w-0 flex-1 truncate rounded-[10px] border border-white/10 bg-well px-3.25 py-3 font-mono text-[13px] text-dim">
+                {{ link }}
+              </div>
+              <button type="button" aria-label="Copy link"
+                class="btn-ghost w-11 flex-none rounded-[10px] text-ink" @click="copy(link, 'Link')">
+                <UIcon name="i-lucide-copy" class="text-base" />
+              </button>
+            </dd>
+          </div>
+
+          <div>
+            <dt class="label-mono mb-1.75">MEETING PASSWORD</dt>
+            <dd class="flex gap-2">
+              <div class="min-w-0 flex-1 truncate rounded-[10px] border bg-well px-3.25 py-3 font-mono"
+                :class="password
+                  ? 'border-signal-500/35 text-base tracking-[.3em] text-signal-300'
+                  : 'border-white/10 text-[13px] text-muted'">
+                {{ password ?? 'Only the admin can see this' }}
+              </div>
+              <button v-if="password" type="button" aria-label="Copy password"
+                class="btn-ghost w-11 flex-none rounded-[10px] text-ink" @click="copy(password, 'Password')">
+                <UIcon name="i-lucide-copy" class="text-base" />
+              </button>
+            </dd>
+          </div>
+        </dl>
+
+        <div class="border-t border-white/7 bg-sunk px-6 py-4.5">
+          <button type="button" class="btn-signal w-full rounded-[10px] py-3.25 text-[15px]"
+            @click="copy(inviteText, 'Invitation')">
+            <UIcon name="i-lucide-clipboard-copy" class="text-base" />Copy invitation
+          </button>
         </div>
-      </dl>
-    </template>
-    <template #footer>
-      <UButton label="Copy invitation" icon="i-lucide-clipboard-copy" block @click="copy(inviteText, 'Invitation')" />
+      </div>
     </template>
   </UModal>
 </template>
