@@ -501,13 +501,40 @@ const options = {
 } as unknown as ParticlesOptions
 const roomCode : Ref<string | null> = ref(null);
 const open = ref(false);
+const checking = ref(false);
+const api = useRoomApi();
+const toast = useToast();
 const onLoad = (container: ParticlesContainer) => {
   // Do something with the container
   container.play()
 }
-const joinRoom = (data: { roomCode: string }) => {
-  roomCode.value = data.roomCode;
-  open.value = true;
+/** Only open the dialog for a meeting that still exists, so a dead code or link fails fast. */
+const joinRoom = async (data: { roomCode: string }) => {
+  if (checking.value) return;
+  checking.value = true;
+  try {
+    const info = await api.getRoomInfo(data.roomCode);
+    if (info.status === 'closed') {
+      toast.add({
+        title: 'This meeting has ended',
+        description: 'Ask the host for a new link.',
+        color: 'error',
+        icon: 'i-lucide-phone-off'
+      });
+      return;
+    }
+    roomCode.value = data.roomCode;
+    open.value = true;
+  } catch (e) {
+    toast.add({
+      title: 'Could not open that meeting',
+      description: apiErrorMessage(e, 'Check the code and try again.'),
+      color: 'error',
+      icon: 'i-lucide-triangle-alert'
+    });
+  } finally {
+    checking.value = false;
+  }
 }
 const createRoom = () => {
   roomCode.value = null;
@@ -545,7 +572,7 @@ onMounted(() => {
             <span>Create Conference Room</span>
           </button>
           <USeparator label="or" color="secondary" />
-          <JoinRoomForm @open-modal="joinRoom" />
+          <JoinRoomForm :checking="checking" @open-modal="joinRoom" />
           <RoomSettingsPopup v-model:open="open" :room-code="roomCode" />
         </div>
       </div>
